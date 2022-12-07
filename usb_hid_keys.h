@@ -35,8 +35,8 @@
 
 #define KEY_NONE 0x00 // No key pressed
 #define KEY_ERR_OVF 0x01 //  Keyboard Error Roll Over - used for all slots if too many keys are pressed ("Phantom key")
-// 0x02 //  Keyboard POST Fail
-// 0x03 //  Keyboard Error Undefined
+#define KEY_ERR_POST 0x02 //  Keyboard POST Fail
+#define KEY_ERR_UNDEF 0x03 //  Keyboard Error Undefined
 #define KEY_A 0x04 // Keyboard a and A
 #define KEY_B 0x05 // Keyboard b and B
 #define KEY_C 0x06 // Keyboard c and C
