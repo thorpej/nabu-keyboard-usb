@@ -52,7 +52,21 @@
  * - Figure out something to map to ALT/OPT.
  */
 
+/* Pico SDK headers */
 #include "pico/stdlib.h"
+#include "pico/printf.h"
+#include "pico/sync.h"
+#include "pico/multicore.h"
+#include "hardware/uart.h"
+
+/* TinyUSB SDK headers */
+#include "bsp/board.h"
+#include "tusb.h"
+
+/* Standard headers */
+#include <string.h>
+
+/* Local headers */
 
 /*
  * Circular queue between the the UART receiver and the USB sender.
@@ -61,7 +75,7 @@
 #define	QUEUE_SIZE		64
 #define	QUEUE_MASK		(QUEUE_SIZE - 1)
 #define	QUEUE_NEXT(n)		(((n) + 1) & QUEUE_MASK)
-#define	QUEUE_EMPTY_P(q)	((a)->cons == (q)->prod)
+#define	QUEUE_EMPTY_P(q)	((q)->cons == (q)->prod)
 #define	QUEUE_FULL_P(q)		(QUEUE_NEXT((q)->prod) == (q)->cons)
 
 struct queue {
@@ -154,7 +168,10 @@ static bool report_chain_running;
 #define	NABU_CODE_JOYDAT_FIRST	0xa0
 #define	NABU_CODE_JOYDAT_LAST	0xbf
 
+#define	NABU_KBD_BAUDRATE	6992
+
 static const uint16_t nabu_to_hid[256] = {
+#if 0
 /*
  * CTRL just lops off the 2 upper bits of the keycode
  * on the NABU keyboard (except for C-'<' ??), but we
@@ -329,6 +346,7 @@ static const uint16_t nabu_to_hid[256] = {
 [0xf9]		=	M_UP | HID_KEY_PAUSE,			/* PAUSE */
 [0xfa]		=	0 /* XXX */,				/* TV/NABU */
 /* 0xfb - 0xff */
+#endif
 };
 
 /*
@@ -352,6 +370,7 @@ static const uint16_t nabu_to_hid[256] = {
  * for physically impossible combinations on a real joystick / dpad.
  */
 static const uint8_t joy_to_dpad[JOY_DIR_MASK + 1] = {
+#if 0
 [JOY_UP]		=	GAMEPAD_HAT_UP,
 [JOY_UP | JOY_RIGHT]	=	GAMEPAD_HAT_UP_RIGHT,
 [JOY_RIGHT]		=	GAMEPAD_HAT_RIGHT,
@@ -360,6 +379,7 @@ static const uint8_t joy_to_dpad[JOY_DIR_MASK + 1] = {
 [JOY_DOWN | JOY_LEFT]	=	GAMEPAD_HAT_DOWN_LEFT,
 [JOY_LEFT]		=	GAMEPAD_HAT_LEFT,
 [JOY_UP | JOY_LEFT]	=	GAMEPAD_HAT_UP_LEFT,
+#endif
 };
 
 typedef enum {
@@ -372,14 +392,22 @@ typedef enum {
  * on both sticks more accurately, but we still need to have a global for
  * the "instance" we're processing while the data is coming in.
  */
-static struct {
+static struct joy_context {
 	joy_state_t state;
 	struct queue queue;
 } joy_context[2];
 
 static void
+joy_init(int which)
+{
+	joy_context[which].state = JOY_STATE_IDLE;
+	queue_init(&joy_context[which].queue);
+}
+
+static void
 send_joy_report(int which, uint8_t data)
 {
+#if 0
 	uint8_t dpad = joy_to_dpad[data & JOY_DIR_MASK];
 	uint8_t buttons = (data & JOY_FIRE) ? GAMEPAD_BUTTON_A : 0;
 
@@ -393,6 +421,7 @@ send_joy_report(int which, uint8_t data)
 
 	tud_hid_report(which ? REPORT_ID_JOY1 : REPORT_ID_JOY0,
 	    &report, sizeof(report));
+#endif
 }
 
 typedef enum {
@@ -407,16 +436,29 @@ static struct {
 	uint16_t code;
 } kbd_context;
 
+static void
+kbd_init(void)
+{
+	kbd_context.state = KBD_STATE_IDLE;
+	kbd_context.code = 0;
+	queue_init(&kbd_context.queue);
+}
+
 static inline uint8_t
 keymod_to_hid(uint16_t code)
 {
+#if 0
 	return (code >> 8) &
 	    (KEYBOARD_MODIFIER_LEFTCTRL | KEYBOARD_MODIFIER_LEFTSHIFT);
+#else
+	return 0;
+#endif
 }
 
 static void
 send_kbd_report(uint16_t code)
 {
+#if 0
 	uint8_t keymod = keymod_to_hid(code);
 	uint8_t keycode = (uint8_t)code;
 
@@ -430,6 +472,7 @@ send_kbd_report(uint16_t code)
 	report_chain_running = true;
 
 	tud_hid_report(REPORT_ID_KBD, &report, sizeof(report));
+#endif
 }
 
 #define	REPORT_INTERVAL_MS	10
@@ -441,6 +484,8 @@ send_kbd_report(uint16_t code)
 static bool
 joy_hid_task(int which)
 {
+	uint8_t c;
+
 	switch (joy_context[which].state) {
 	case JOY_STATE_IDLE:
 		if (queue_get(&joy_context[which].queue, &c)) {
@@ -454,7 +499,7 @@ joy_hid_task(int which)
 
 	default:
 		printf("!!! INVALID joy_context[%d].state %d !!!\n",
-		    which, joy_context[i].state);
+		    which, joy_context[which].state);
 		joy_context[which].state = JOY_STATE_IDLE;
 	}
 
@@ -464,6 +509,8 @@ joy_hid_task(int which)
 static void
 hid_task(void)
 {
+	uint8_t c;
+
 	/* This is good for ~139 years of uptime. */
 	static uint32_t start_ms;
 
@@ -485,6 +532,7 @@ hid_task(void)
 		return;
 	}
 
+#if 0
 	/*
 	 * We have at least one report to send.  If we're suspended,
 	 * wake up the host.  We'll send the report the next time
@@ -494,6 +542,7 @@ hid_task(void)
 		tud_remote_wakeup();
 		return;
 	}
+#endif
 
 	/*
 	 * The keyboard is the lowest report ID, so kick that one off
@@ -513,7 +562,7 @@ hid_task(void)
 		return;
 
 	case KBD_STATE_WANT_KEYUP:
-		send_kbd_report(HID_KEY_NONE);
+		send_kbd_report(/*HID_KEY_NONE*/0);
 		return;
 
 	default:
@@ -547,7 +596,7 @@ nabu_keyboard_reader(void)
 	uint8_t c;
 
 	for (;;) {
-		c = uart_getc();	/* XXX */
+		c = uart_getc(uart1);
 
 		/* Check for a joystick instance. */
 		if (c == NABU_CODE_JOY0 || c == NABU_CODE_JOY1) {
@@ -584,6 +633,7 @@ nabu_keyboard_reader(void)
 	}
 }
 
+#if 0
 /*
  * Invoked when a report is sent successfully to the host.
  * This is used to send the next report.
@@ -618,6 +668,7 @@ tud_hid_report_complete_cb(uint8_t instance, uint8_t *report, uint8_t len)
 		break;
 	}
 }
+#endif
 
 #define	VERSION_MAJOR	0
 #define	VERSION_MINOR	1
@@ -625,6 +676,7 @@ tud_hid_report_complete_cb(uint8_t instance, uint8_t *report, uint8_t len)
 int
 main(void)
 {
+	uint actual_baud;
 
 	// board_init();
 
@@ -632,22 +684,34 @@ main(void)
 	    VERSION_MAJOR, VERSION_MINOR);
 	printf("Copyright (c) 2022 Jason R. Thorpe\n\n");
 
+	printf("Initializing UART1 (NABU keyboard).\n");
+	actual_baud = uart_init(uart1, NABU_KBD_BAUDRATE);
+	if (actual_baud != NABU_KBD_BAUDRATE) {
+		printf("WARNING: UART1 actual baud rate %u != %u\n",
+		    actual_baud, NABU_KBD_BAUDRATE);
+	}
+	uart_set_fifo_enabled(uart1, true);
+	uart_set_format(uart1, 8/*data*/, 1/*stop*/, UART_PARITY_NONE);
+
 	printf("Initializing USB stack.\n");
-	tud_init(BOARD_TUD_RHPORT);
+	// tud_init(BOARD_TUD_RHPORT);
 
 	printf("Initializing keyboard.\n");
-	kbd_init(&kbd_context);
+	kbd_init();
 
 	printf("Initializing joysticks.\n");
-	joy_init(&joy_context[0]);
-	joy_init(&joy_context[1]);
+	joy_init(0);
+	joy_init(1);
+
+	printf("Resetting Core 1.\n");
+	multicore_reset_core1();
 
 	printf("Starting UART reader on Core 1.\n");
 	multicore_launch_core1(nabu_keyboard_reader);
 
 	printf("Entering main loop!\n");
 	for (;;) {
-		tud_task();		/* TinyUSB device task */
+		// tud_task();		/* TinyUSB device task */
 		led_task();		/* heartbeat LED */
 		hid_task();		/* HID processing */
 	}
