@@ -171,7 +171,6 @@ static bool report_chain_running;
 #define	NABU_KBD_BAUDRATE	6992
 
 static const uint16_t nabu_to_hid[256] = {
-#if 0
 /*
  * CTRL just lops off the 2 upper bits of the keycode
  * on the NABU keyboard (except for C-'<' ??), but we
@@ -185,12 +184,12 @@ static const uint16_t nabu_to_hid[256] = {
 [0x05]		=	M_CTRL | HID_KEY_E,
 [0x06]		=	M_CTRL | HID_KEY_F,
 [0x07]		=	M_CTRL | HID_KEY_G,
-[0x08]		=	M_CTRL | HID_KEY_H,
-[0x09]		=	M_CTRL | HID_KEY_I,
-[0x0a]		=	M_CTRL | HID_KEY_J,
+[0x08]		=	HID_KEY_BACKSPACE,			/* Backspace */
+[0x09]		=	HID_KEY_TAB,				/* Tab */
+[0x0a]		=	HID_KEY_ENTER,				/* LF */
 [0x0b]		=	M_CTRL | HID_KEY_K,
 [0x0c]		=	M_CTRL | HID_KEY_L,
-[0x0d]		=	M_CTRL | HID_KEY_M,
+[0x0d]		=	HID_KEY_ENTER,				/* CR */
 [0x0e]		=	M_CTRL | HID_KEY_N,
 [0x0f]		=	M_CTRL | HID_KEY_O,
 [0x10]		=	M_CTRL | HID_KEY_P,
@@ -204,9 +203,9 @@ static const uint16_t nabu_to_hid[256] = {
 [0x18]		=	M_CTRL | HID_KEY_X,
 [0x19]		=	M_CTRL | HID_KEY_Y,
 [0x1a]		=	M_CTRL | HID_KEY_Z,
-[0x1b]		=	M_CTRL | HID_KEY_LEFTBRACE,
+[0x1b]		=	HID_KEY_ESCAPE,				/* ESC */
 [0x1c]		=	M_CTRL | M_SHIFT | HID_KEY_COMMA,	/* C-'<' */
-[0x1d]		=	M_CTRL | HID_KEY_RIGHTBRACE,
+[0x1d]		=	M_CTRL | HID_KEY_BRACKET_RIGHT,
 [0x1e]		=	M_CTRL | M_SHIFT | HID_KEY_6,		/* C-'^' */
 [0x1f]		=	M_CTRL | M_SHIFT | HID_KEY_MINUS,	/* C-'_' */
 
@@ -224,7 +223,7 @@ static const uint16_t nabu_to_hid[256] = {
 [0x2b]		=	M_SHIFT | HID_KEY_EQUAL,		/* + */
 [0x2c]		=	HID_KEY_COMMA,				/* , */
 [0x2d]		=	HID_KEY_MINUS,				/* - */
-[0x2e]		=	HID_KEY_DOT,				/* . */
+[0x2e]		=	HID_KEY_PERIOD,				/* . */
 [0x2f]		=	HID_KEY_SLASH,				/* / */
 [0x30]		=	HID_KEY_0,
 [0x31]		=	HID_KEY_1,
@@ -240,7 +239,7 @@ static const uint16_t nabu_to_hid[256] = {
 [0x3b]		=	HID_KEY_SEMICOLON,
 [0x3c]		=	M_SHIFT | HID_KEY_COMMA,		/* < */
 [0x3d]		=	HID_KEY_EQUAL,
-[0x3e]		=	M_SHIFT | HID_KEY_DOT,			/* > */
+[0x3e]		=	M_SHIFT | HID_KEY_PERIOD,		/* > */
 [0x3f]		=	M_SHIFT | HID_KEY_SLASH,		/* ? */
 
 [0x40]		=	M_SHIFT | HID_KEY_2,			/* @ */
@@ -270,9 +269,9 @@ static const uint16_t nabu_to_hid[256] = {
 [0x58]		=	M_SHIFT | HID_KEY_X,
 [0x59]		=	M_SHIFT | HID_KEY_Y,
 [0x5a]		=	M_SHIFT | HID_KEY_Z,
-[0x5b]		=	HID_KEY_LEFTBRACE,			/* [ */
+[0x5b]		=	HID_KEY_BRACKET_LEFT,			/* [ */
 /* 0x5c */
-[0x5d]		=	HID_KEY_RIGHTBRACE,			/* ] */
+[0x5d]		=	HID_KEY_BRACKET_RIGHT,			/* ] */
 [0x5e]		=	M_SHIFT | HID_KEY_6,			/* ^ */
 [0x5f]		=	M_SHIFT | HID_KEY_MINUS,		/* _ */
 
@@ -303,17 +302,17 @@ static const uint16_t nabu_to_hid[256] = {
 [0x78]		=	HID_KEY_X,
 [0x79]		=	HID_KEY_Y,
 [0x7a]		=	HID_KEY_Z,
-[0x7b]		=	M_SHIFT | HID_KEY_LEFTBRACE,		/* { */
+[0x7b]		=	M_SHIFT | HID_KEY_BRACKET_LEFT,		/* { */
 /* 0x7c */
-[0x7d]		=	M_SHIFT | HID_KEY_RIGHTBRACE,		/* } */
+[0x7d]		=	M_SHIFT | HID_KEY_BRACKET_RIGHT,	/* } */
 /* 0x7e */
 [0x7f]		=	HID_KEY_BACKSPACE,			/* DEL */
 
 /* 0x80 - 0x8f */
-[0x90]		=	HID_KEY_ERR_OVF,
-[0x91]		=	HID_KEY_ERR_POST,			/* bad RAM */
-[0x92]		=	HID_KEY_ERR_POST,			/* bad ROM */
-[0x93]		=	HID_KEY_ERR_UNDEF,			/* crash? */
+[0x90]		=	M_ERR | 1,				/* > 1 key */
+[0x91]		=	M_ERR | 2,				/* bad RAM */
+[0x92]		=	M_ERR | 3,				/* bad ROM */
+[0x93]		=	M_ERR | 4,				/* crash? */
 [0x94]		=	M_ERR | 5,				/* heartbeat */
 [0x95]		=	M_ERR | 6,				/* reboot */
 /* 0x96 - 0x9f */
@@ -322,31 +321,30 @@ static const uint16_t nabu_to_hid[256] = {
 
 /* 0xc0 - 0xdf */
 
-[0xe0]		=	M_DOWN | HID_KEY_RIGHT,
-[0xe1]		=	M_DOWN | HID_KEY_LEFT,
-[0xe2]		=	M_DOWN | HID_KEY_DOWN,
-[0xe3]		=	M_DOWN | HID_KEY_UP,
-[0xe4]		=	M_DOWN | HID_KEY_PAGEDOWN,		/* |||> */
-[0xe5]		=	M_DOWN | HID_KEY_PAGEUP,			/* <||| */
+[0xe0]		=	M_DOWN | HID_KEY_ARROW_RIGHT,
+[0xe1]		=	M_DOWN | HID_KEY_ARROW_LEFT,
+[0xe2]		=	M_DOWN | HID_KEY_ARROW_DOWN,
+[0xe3]		=	M_DOWN | HID_KEY_ARROW_UP,
+[0xe4]		=	M_DOWN | HID_KEY_PAGE_DOWN,		/* |||> */
+[0xe5]		=	M_DOWN | HID_KEY_PAGE_UP,		/* <||| */
 [0xe6]		=	0 /* XXX */,				/* NO */
 [0xe7]		=	0 /* XXX */,				/* YES */
 [0xe8]		=	0 /* XXX */,				/* SYM */
 [0xe9]		=	M_DOWN | HID_KEY_PAUSE,			/* PAUSE */
 [0xea]		=	0 /* XXX */,				/* TV/NABU */
 /* 0xeb - 0xef */
-[0xf0]		=	M_UP | HID_KEY_RIGHT,
-[0xf1]		=	M_UP | HID_KEY_LEFT,
-[0xf2]		=	M_UP | HID_KEY_DOWN,
-[0xf3]		=	M_UP | HID_KEY_UP,
-[0xf4]		=	M_UP | HID_KEY_PAGEDOWN,			/* |||> */
-[0xf5]		=	M_UP | HID_KEY_PAGEUP,			/* <||| */
+[0xf0]		=	M_UP | HID_KEY_ARROW_RIGHT,
+[0xf1]		=	M_UP | HID_KEY_ARROW_LEFT,
+[0xf2]		=	M_UP | HID_KEY_ARROW_DOWN,
+[0xf3]		=	M_UP | HID_KEY_ARROW_UP,
+[0xf4]		=	M_UP | HID_KEY_PAGE_DOWN,		/* |||> */
+[0xf5]		=	M_UP | HID_KEY_PAGE_UP,			/* <||| */
 [0xf6]		=	0 /* XXX */,				/* NO */
 [0xf7]		=	0 /* XXX */,				/* YES */
 [0xf8]		=	0 /* XXX */,				/* SYM */
 [0xf9]		=	M_UP | HID_KEY_PAUSE,			/* PAUSE */
 [0xfa]		=	0 /* XXX */,				/* TV/NABU */
 /* 0xfb - 0xff */
-#endif
 };
 
 /*
@@ -370,7 +368,6 @@ static const uint16_t nabu_to_hid[256] = {
  * for physically impossible combinations on a real joystick / dpad.
  */
 static const uint8_t joy_to_dpad[JOY_DIR_MASK + 1] = {
-#if 0
 [JOY_UP]		=	GAMEPAD_HAT_UP,
 [JOY_UP | JOY_RIGHT]	=	GAMEPAD_HAT_UP_RIGHT,
 [JOY_RIGHT]		=	GAMEPAD_HAT_RIGHT,
@@ -379,7 +376,6 @@ static const uint8_t joy_to_dpad[JOY_DIR_MASK + 1] = {
 [JOY_DOWN | JOY_LEFT]	=	GAMEPAD_HAT_DOWN_LEFT,
 [JOY_LEFT]		=	GAMEPAD_HAT_LEFT,
 [JOY_UP | JOY_LEFT]	=	GAMEPAD_HAT_UP_LEFT,
-#endif
 };
 
 typedef enum {
