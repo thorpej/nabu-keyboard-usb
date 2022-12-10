@@ -140,6 +140,31 @@ queue_get(struct queue *q, uint8_t *vp)
 }
 
 /*
+ * Standard TinyUSB example LED blink pattern.
+ */
+#define	BLINK_NOT_MOUNTED	250
+#define	BLINK_MOUNTED		1000
+#define	BLINK_SUSPENDED		2500
+
+static uint32_t blink_interval_ms = BLINK_NOT_MOUNTED;
+
+static void
+led_task(void)
+{
+	static uint32_t start_ms = 0;
+	static bool led_state = false;
+
+	if (board_millis() - start_ms < blink_interval_ms) {
+		return;
+	}
+
+	start_ms += blink_interval_ms;
+
+	board_led_write(led_state);
+	led_state ^= true;
+}
+
+/*
  * We only want to have one report chain running at a time.
  */
 static bool report_chain_running;
@@ -575,12 +600,6 @@ hid_task(void)
 	}
 }
 
-static void
-led_task(void)
-{
-	/* XXX */
-}
-
 /*
  * This function runs on Core 1, sucks down bytes from the UART
  * in a tight loop, and pushes them into the appropriate queue.
@@ -674,7 +693,8 @@ main(void)
 {
 	uint actual_baud;
 
-	// board_init();
+	/* TinyUSB SDK board init - initializes LED and console UART (0). */
+	board_init();
 
 	printf("NABU Keyboard -> USB HID Adapter %d.%d\n",
 	    VERSION_MAJOR, VERSION_MINOR);
@@ -690,7 +710,7 @@ main(void)
 	uart_set_format(uart1, 8/*data*/, 1/*stop*/, UART_PARITY_NONE);
 
 	printf("Initializing USB stack.\n");
-	// tud_init(BOARD_TUD_RHPORT);
+	tusb_init();
 
 	printf("Initializing keyboard.\n");
 	kbd_init();

@@ -21,6 +21,7 @@ target_link_libraries(nabu_usb_keyboard
 	pico_stdlib
 	pico_sync
 	pico_multicore
+	tinyusb_board
 	tinyusb_device
 	)
 
