@@ -47,9 +47,7 @@
  * is used as the console port for debugging purposes.
  *
  * TODO:
- * - Handle the keyboard error codes / heartbeat.
  * - Handle the host requesting Boot protocol (rather than Report protocol).
- * - Report HID gamepad data for the joysticks.
  * - Map SYM to META/GUI/CMD (and track its state).
  * - Figure out something to map to ALT/OPT.
  */
@@ -635,7 +633,6 @@ joy_init(int which)
 static void
 send_joy_report(int which, uint8_t data)
 {
-#if 0
 	uint8_t dpad = joy_to_dpad[data & JOY_DIR_MASK];
 	uint8_t buttons = (data & JOY_FIRE) ? GAMEPAD_BUTTON_A : 0;
 
@@ -645,7 +642,6 @@ send_joy_report(int which, uint8_t data)
 	};
 
 	tud_hid_n_report(ITF_NUM_JOY0 + which, 0, &report, sizeof(report));
-#endif
 }
 
 static struct {
@@ -921,19 +917,17 @@ hid_task(void)
 		}
 	}
 
-#if 0
 	/* Now do the joysticks. */
 	for (int i = 0; i < 2; i++) {
 		if (tud_hid_n_ready(ITF_NUM_JOY0 + i)) {
-			if (joy_context[which].zombie) {
-				send_joy_report(which, 0);
-				joy_context[which].zombie = false;
-			} else if (queue_get(&joy_context[which].queue, &c)) {
-				send_joy_report(which, c);
+			if (joy_context[i].zombie) {
+				send_joy_report(i, 0);
+				joy_context[i].zombie = false;
+			} else if (queue_get(&joy_context[i].queue, &c)) {
+				send_joy_report(i, c);
 			}
 		}
 	}
-#endif
 }
 
 /*

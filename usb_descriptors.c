@@ -66,13 +66,18 @@ desc_hid_report1[] =
 	TUD_HID_REPORT_DESC_KEYBOARD()
 };
 
-#if 0
 static uint8_t const
 desc_hid_report2[] =
 {
-	TUD_HID_REPORT_DESC_MOUSE()
+	TUD_HID_REPORT_DESC_GAMEPAD()
 };
-#endif
+
+static uint8_t const
+desc_hid_report3[] =
+{
+	TUD_HID_REPORT_DESC_GAMEPAD()
+};
+
 
 // Invoked when received GET HID REPORT DESCRIPTOR
 // Application return pointer to descriptor
@@ -83,10 +88,12 @@ tud_hid_descriptor_report_cb(uint8_t itf)
 	switch (itf) {
 	case ITF_NUM_KBD:
 		return desc_hid_report1;
-#if 0
+
 	case ITF_NUM_JOY0:
 		return desc_hid_report2;
-#endif
+
+	case ITF_NUM_JOY1:
+		return desc_hid_report3;
 	}
 
 	return NULL;
@@ -98,7 +105,8 @@ tud_hid_descriptor_report_cb(uint8_t itf)
 
 #define	CONFIG_TOTAL_LEN	(TUD_CONFIG_DESC_LEN +		\
 				 TUD_HID_DESC_LEN +		\
-				 /*TUD_HID_DESC_LEN*/0)
+				 TUD_HID_DESC_LEN +		\
+				 TUD_HID_DESC_LEN)
 
 #define	EPNUM_KBD		0x81
 #define	EPNUM_JOY0		0x82
@@ -117,11 +125,14 @@ static uint8_t const desc_configuration[] =
 	TUD_HID_DESCRIPTOR(ITF_NUM_KBD, 4, HID_ITF_PROTOCOL_NONE,
 	    sizeof(desc_hid_report1), EPNUM_KBD,
 	    CFG_TUD_HID_EP_BUFSIZE, 10),
-#if 0
+
 	TUD_HID_DESCRIPTOR(ITF_NUM_JOY0, 5, HID_ITF_PROTOCOL_NONE,
 	    sizeof(desc_hid_report2), EPNUM_JOY0,
-	    CFG_TUD_HID_EP_BUFSIZE, 10)
-#endif
+	    CFG_TUD_HID_EP_BUFSIZE, 10),
+
+	TUD_HID_DESCRIPTOR(ITF_NUM_JOY1, 6, HID_ITF_PROTOCOL_NONE,
+	    sizeof(desc_hid_report2), EPNUM_JOY0,
+	    CFG_TUD_HID_EP_BUFSIZE, 10),
 };
 
 // Invoked when received GET CONFIGURATION DESCRIPTOR
@@ -145,10 +156,9 @@ static char const* string_desc_arr[] =
   "@thorpej",                     // 1: Manufacturer
   "NABU Keyboard Adapter",        // 2: Product
   "123456",                       // 3: Serials, should use chip ID
-  "Keyboard Interface",           // 4: Interface 1 String
-#if 0
-  "Mouse Interface",              // 5: Interface 2 String
-#endif
+  "Keyboard",                     // 4: Interface 1 String
+  "Joystick 0",                   // 5: Interface 2 String
+  "Joystick 1",                   // 6: Interface 3 String
 };
 static const unsigned int string_desc_arr_cnt =
     sizeof(string_desc_arr)/sizeof(string_desc_arr[0]);

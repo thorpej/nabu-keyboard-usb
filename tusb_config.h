@@ -44,10 +44,8 @@
 
 enum {
 	ITF_NUM_KBD	= 0,
-#if 0
 	ITF_NUM_JOY0	= 1,
 	ITF_NUM_JOY1	= 2,
-#endif
 	ITF_NUM_TOTAL
 };
 
