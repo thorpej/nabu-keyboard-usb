@@ -97,6 +97,13 @@ static bool debug_enabled = true;
 #define	DEBUG_STRAP_PIN		22
 
 /*
+ * GP26 (physical pin 31 on the DIP-40 Pico) is connected to the gate
+ * of a power MOSFET that sits between the keyboard V- and GND.  Driving
+ * GP26 high completes the keyboard power supply circuit powers it on.
+ */
+#define	PWREN_PIN		26
+
+/*
  * Circular queue between the the UART receiver and the USB sender.
  */
 
@@ -685,7 +692,7 @@ static volatile uint32_t last_kbd_message_time;	/* in milliseconds */
 static void
 kbd_setpower(bool enabled)
 {
-	/* XXX */
+	gpio_put(PWREN_PIN, enabled);
 }
 
 static void
@@ -1112,6 +1119,8 @@ main(void)
 	printf("Copyright (c) 2022 Jason R. Thorpe\n\n");
 
 	printf("Disabling keyboard power.\n");
+	gpio_init(PWREN_PIN);
+	gpio_set_dir(PWREN_PIN, GPIO_OUT);
 	kbd_setpower(false);
 
 	/*
@@ -1123,7 +1132,7 @@ main(void)
 	gpio_pull_up(DEBUG_STRAP_PIN);
 	debug_enabled = !gpio_get(DEBUG_STRAP_PIN);
 	printf("Debug messages %s.\n", debug_enabled ? "ENABLED" : "disabled");
-	gpio_set_pulls(DEBUG_STRAP_PIN, false, false);
+	gpio_disable_pulls(DEBUG_STRAP_PIN);
 
 	printf("Initializing UART1 (NABU keyboard).\n");
 	gpio_set_function(UART1_TX_PIN, GPIO_FUNC_UART);
