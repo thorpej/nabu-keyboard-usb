@@ -124,6 +124,8 @@ queue_consume(struct queue *q, uint8_t *vp, bool advance)
 	mutex_enter_blocking(&q->mutex);
 	if (! QUEUE_EMPTY_P(q)) {
 		*vp = q->data[q->cons];
+		printf("DEBUG: prod=%u cons=%u val=0x%02x\n",
+		    q->prod, q->cons, *vp);
 		if (advance) {
 			q->cons = QUEUE_NEXT(q->cons);
 		}
@@ -674,7 +676,7 @@ nabu_keyboard_reader(void)
 
 	static int start_ms = 0;
 	static int state = 0;
-	static const char str[] = "The quick brown fox jumps over the lazy dog.\n";
+	static const char str[] = "Oink!\n";
 	int idx;
 
 	for (;;) {
@@ -697,6 +699,8 @@ nabu_keyboard_reader(void)
 			printf("Injecting '%c'\n", c);
 			queue_add(&kbd_context.queue, c);
 			state++;
+			continue;
+		} else {
 			continue;
 		}
 #endif
