@@ -1034,19 +1034,23 @@ kbd_getc(void)
 		start_ms += 1000;
 
 		if (start_ms == 4000) {
-			debug_printf("DEBUG: %s: Injecting ERR_RESET\n");
+			debug_printf("DEBUG: %s: Injecting ERR_RESET\n",
+			    __func__);
 			c = NABU_CODE_ERR_RESET;
+			goto out;
 		} else if (start_ms >= 5000 && (c = str[idx]) != '\0') {
 			debug_printf("DEBUG: %s: Injecting '%c'\n",
 			    __func__, c);
 			idx++;
+			goto out;
 		} else if ((start_ms % 4000) == 0) {
-			debug_printf("DEBUG: %s: Injecting ERR_PING\n");
+			debug_printf("DEBUG: %s: Injecting ERR_PING\n",
+			  __func__);
 			c = NABU_CODE_ERR_PING;
-		} else {
-			continue;
+			goto out;
 		}
 	}
+ out:
 #else
 	c = uart_getc(uart1);
 	now = board_millis();
@@ -1098,6 +1102,8 @@ nabu_keyboard_reader(void)
 		 * will be taken.
 		 */
 		if (nabu_to_hid[c].codes[0] != 0 || NABU_CODE_ERR_P(c)) {
+			debug_printf("DEBUG: %s: adding code 0x%02x\n",
+			    __func__, c);
 			queue_add(&kbd_context.queue, c);
 		}
 	}
