@@ -90,6 +90,13 @@ static bool debug_enabled = true;
 #define	UART1_RX_PIN		5
 
 /*
+ * GP22 (physical pin 29 on the DIP-40 Pico) is a debug-enable strapping
+ * pin that we sample when we launch.  It's pulled-up internally; strap
+ * to ground to enable debug messages.
+ */
+#define	DEBUG_STRAP_PIN		22
+
+/*
  * Circular queue between the the UART receiver and the USB sender.
  */
 
@@ -1106,6 +1113,17 @@ main(void)
 
 	printf("Disabling keyboard power.\n");
 	kbd_setpower(false);
+
+	/*
+	 * Sample the debug strapping pin.  If it's tied to GND, then we
+	 * enable debug messages.  Once we've sampled it, we're done, so
+	 * we can disable the pull-up to save a teensy bit of power.
+	 */
+	gpio_init(DEBUG_STRAP_PIN);
+	gpio_pull_up(DEBUG_STRAP_PIN);
+	debug_enabled = !gpio_get(DEBUG_STRAP_PIN);
+	printf("Debug messages %s.\n", debug_enabled ? "ENABLED" : "disabled");
+	gpio_set_pulls(DEBUG_STRAP_PIN, false, false);
 
 	printf("Initializing UART1 (NABU keyboard).\n");
 	gpio_set_function(UART1_TX_PIN, GPIO_FUNC_UART);
