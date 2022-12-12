@@ -732,19 +732,25 @@ kbd_reboot(void)
 static bool
 kbd_deadcheck(uint32_t now)
 {
+	static bool deadcheck_warned;
 
 	if (now - last_kbd_message_time < DEADCHECK_WARN_MS) {
+		deadcheck_warned = false;
 		return false;
 	}
 
 	if (now - last_kbd_message_time < DEADCHECK_DECLARE_MS) {
-		printf("WARNING: keyboard failed to ping.\n");
+		if (! deadcheck_warned) {
+			printf("WARNING: keyboard failed to ping.\n");
+			deadcheck_warned = true;
+		}
 		return false;
 	}
 
 	/* Declare the keyboard dead and reboot it. */
 	printf("ERROR: keyboard appears dead, rebooting...\n");
 	kbd_reboot();
+	deadcheck_warned = false;
 	return true;
 }
 
@@ -877,7 +883,8 @@ hid_task(void)
 			 * we do one more key-up event in case there is
 			 * other state latched by the host.
 			 */
-			debug_printf("DEBUG: %s: clearing zombie state.\n");
+			debug_printf("DEBUG: %s: clearing zombie state.\n",
+			    __func__);
 			send_kbd_report(HID_KEY_NONE);
 			kbd_context.zombie = false;
 		} else if (queue_get(&kbd_context.queue, &c)) {
