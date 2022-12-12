@@ -47,6 +47,8 @@
  * is used as the console port for debugging purposes.
  *
  * TODO:
+ * - Handle the keyboard error codes / heartbeat.
+ * - Handle the host requesting Boot protocol (rather than Report protocol).
  * - Report HID gamepad data for the joysticks.
  * - Map SYM to META/GUI/CMD (and track its state).
  * - Figure out something to map to ALT/OPT.
@@ -67,6 +69,8 @@
 #include <string.h>
 
 /* Local headers */
+
+#define	SIMULATE_KEYSTROKES	/* simulate keystrokes for debugging */
 
 /*
  * GPIO pins 4 and 5 are used for UART1 TX and RX, respectively.
@@ -124,8 +128,6 @@ queue_consume(struct queue *q, uint8_t *vp, bool advance)
 	mutex_enter_blocking(&q->mutex);
 	if (! QUEUE_EMPTY_P(q)) {
 		*vp = q->data[q->cons];
-		printf("DEBUG: prod=%u cons=%u val=0x%02x\n",
-		    q->prod, q->cons, *vp);
 		if (advance) {
 			q->cons = QUEUE_NEXT(q->cons);
 		}
@@ -201,17 +203,23 @@ static bool want_remote_wakeup = false;
 /*
  * Map NABU keycodes to HID key codes.
  *
- * Keys with M_DOWN and M_UP get separate reports for the down
- * and up events, respectively.  Otherwise, we automatically generate
- * 2 reports for the down and up events, since the keyboard doesn't
- * send them.
+ * The HID Report array sends a report for each modifier key, in the
+ * seqence they are pressed / released.  So, an 'A' is:
  *
- * Unassigned entries get 0, which conveniently is HID_KEY_NONE.
+ *	Shift, Shift + A, Shift, none
+ *
+ * We encode these sequences directly in the map.  The final entry in
+ * each sequence is always 0.  For keys where we get individual Down/Up
+ * events from the NABU keyboard, we don't use sequences, we just send
+ * the individual event (those keys aren't affected by modifiers).
+ *
+ * Unassigned entries get 0, which conveniently is HID_KEY_NONE.  N.B.
+ * the NABU keyboard reader thread won't even enqueue keystroke events
+ * for these unassigned keys.
  */
 
 #define	M_CTRL		0x0100		/* KEYBOARD_MODIFIER_LEFTCTRL << 8 */
 #define	M_SHIFT		0x0200		/* KEYBOARD_MODIFIER_LEFTSHIFT << 8 */
-#define	M_ERR		0x0400
 #define	M_DOWN		0x1000
 #define	M_UP		0x2000
 #define	M_JOY		0x4000
@@ -219,185 +227,336 @@ static bool want_remote_wakeup = false;
 
 #define	NABU_CODE_JOY0		0x80
 #define	NABU_CODE_JOY1		0x81
+#define	NABU_CODE_ERR_FIRST	0x90
+#define	NABU_CODE_ERR_LAST	0x95
 #define	NABU_CODE_JOYDAT_FIRST	0xa0
 #define	NABU_CODE_JOYDAT_LAST	0xbf
 
 #define	NABU_KBD_BAUDRATE	6992
 
-static const uint16_t nabu_to_hid[256] = {
+struct codeseq {
+	uint16_t codes[6];	/* 0-terminated */
+};
+
+static const struct codeseq nabu_to_hid[256] = {
 /*
  * CTRL just lops off the 2 upper bits of the keycode
  * on the NABU keyboard (except for C-'<' ??), but we
  * simplify to C-a, C-c, etc.
  */
-[0x00]		=	M_CTRL | M_SHIFT | HID_KEY_2,		/* C-'@' */
-[0x01]		=	M_CTRL | HID_KEY_A,
-[0x02]		=	M_CTRL | HID_KEY_B,
-[0x03]		=	M_CTRL | HID_KEY_C,
-[0x04]		=	M_CTRL | HID_KEY_D,
-[0x05]		=	M_CTRL | HID_KEY_E,
-[0x06]		=	M_CTRL | HID_KEY_F,
-[0x07]		=	M_CTRL | HID_KEY_G,
-[0x08]		=	HID_KEY_BACKSPACE,			/* Backspace */
-[0x09]		=	HID_KEY_TAB,				/* Tab */
-[0x0a]		=	HID_KEY_ENTER,				/* LF */
-[0x0b]		=	M_CTRL | HID_KEY_K,
-[0x0c]		=	M_CTRL | HID_KEY_L,
-[0x0d]		=	HID_KEY_ENTER,				/* CR */
-[0x0e]		=	M_CTRL | HID_KEY_N,
-[0x0f]		=	M_CTRL | HID_KEY_O,
-[0x10]		=	M_CTRL | HID_KEY_P,
-[0x11]		=	M_CTRL | HID_KEY_Q,
-[0x12]		=	M_CTRL | HID_KEY_R,
-[0x13]		=	M_CTRL | HID_KEY_S,
-[0x14]		=	M_CTRL | HID_KEY_T,
-[0x15]		=	M_CTRL | HID_KEY_U,
-[0x16]		=	M_CTRL | HID_KEY_V,
-[0x17]		=	M_CTRL | HID_KEY_W,
-[0x18]		=	M_CTRL | HID_KEY_X,
-[0x19]		=	M_CTRL | HID_KEY_Y,
-[0x1a]		=	M_CTRL | HID_KEY_Z,
-[0x1b]		=	HID_KEY_ESCAPE,				/* ESC */
-[0x1c]		=	M_CTRL | M_SHIFT | HID_KEY_COMMA,	/* C-'<' */
-[0x1d]		=	M_CTRL | HID_KEY_BRACKET_RIGHT,
-[0x1e]		=	M_CTRL | M_SHIFT | HID_KEY_6,		/* C-'^' */
-[0x1f]		=	M_CTRL | M_SHIFT | HID_KEY_MINUS,	/* C-'_' */
+[0x00]		=	{ { M_CTRL,				/* C-'@' */
+			    M_CTRL | M_SHIFT,
+			    M_CTRL | M_SHIFT | HID_KEY_2,
+			    M_CTRL | M_SHIFT,
+			    M_CTRL } },
+[0x01]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_A,
+			    M_CTRL } },
+[0x02]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_B,
+			    M_CTRL } },
+[0x03]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_C,
+			    M_CTRL } },
+[0x04]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_D,
+			    M_CTRL } },
+[0x05]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_E,
+			    M_CTRL } },
+[0x06]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_F,
+			    M_CTRL } },
+[0x07]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_G,
+			    M_CTRL } },
+[0x08]		=	{ { HID_KEY_BACKSPACE } },		/* Backspace */
+[0x09]		=	{ { HID_KEY_TAB } },			/* Tab */
+[0x0a]		=	{ { HID_KEY_ENTER } },			/* LF */
+[0x0b]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_K,
+			    M_CTRL } },
+[0x0c]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_L,
+			    M_CTRL } },
+[0x0d]		=	{ { HID_KEY_ENTER } },			/* CR */
+[0x0e]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_N,
+			    M_CTRL } },
+[0x0f]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_O,
+			    M_CTRL } },
+[0x10]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_P,
+			    M_CTRL } },
+[0x11]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_Q,
+			    M_CTRL } },
+[0x12]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_R,
+			    M_CTRL } },
+[0x13]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_S,
+			    M_CTRL } },
+[0x14]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_T,
+			    M_CTRL } },
+[0x15]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_U,
+			    M_CTRL } },
+[0x16]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_V,
+			    M_CTRL } },
+[0x17]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_W,
+			    M_CTRL } },
+[0x18]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_X,
+			    M_CTRL } },
+[0x19]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_Y,
+			    M_CTRL } },
+[0x1a]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_Z,
+			    M_CTRL } },
+[0x1b]		=	{ { HID_KEY_ESCAPE } },			/* ESC */
+[0x1c]		=	{ { M_CTRL,				/* C-'<' */
+			    M_CTRL | M_SHIFT,
+			    M_CTRL | M_SHIFT | HID_KEY_COMMA,
+			    M_CTRL | M_SHIFT,
+			    M_CTRL } },
+[0x1d]		=	{ { M_CTRL,
+			    M_CTRL | HID_KEY_BRACKET_RIGHT,
+			    M_CTRL } },
+[0x1e]		=	{ { M_CTRL,				/* C-'^' */
+			    M_CTRL | M_SHIFT,
+			    M_CTRL | M_SHIFT | HID_KEY_6,
+			    M_CTRL | M_SHIFT,
+			    M_CTRL } },
+[0x1f]		=	{ { M_CTRL,				/* C-'_' */
+			    M_CTRL | M_SHIFT,
+			    M_CTRL | M_SHIFT | HID_KEY_MINUS,
+			    M_CTRL | M_SHIFT,
+			    M_CTRL } },
 
-[0x20]		=	HID_KEY_SPACE,
-[0x21]		=	M_SHIFT | HID_KEY_1,			/* ! */
-[0x22]		=	M_SHIFT | HID_KEY_APOSTROPHE,		/* " */
-[0x23]		=	M_SHIFT | HID_KEY_3,			/* # */
-[0x24]		=	M_SHIFT | HID_KEY_4,			/* $ */
-[0x25]		=	M_SHIFT | HID_KEY_5,			/* % */
-[0x26]		=	M_SHIFT | HID_KEY_7,			/* & */
-[0x27]		=	HID_KEY_APOSTROPHE,			/* ' */
-[0x28]		=	M_SHIFT | HID_KEY_9,			/* ( */
-[0x29]		=	M_SHIFT | HID_KEY_0,			/* ) */
-[0x2a]		=	M_SHIFT | HID_KEY_8,			/* * */
-[0x2b]		=	M_SHIFT | HID_KEY_EQUAL,		/* + */
-[0x2c]		=	HID_KEY_COMMA,				/* , */
-[0x2d]		=	HID_KEY_MINUS,				/* - */
-[0x2e]		=	HID_KEY_PERIOD,				/* . */
-[0x2f]		=	HID_KEY_SLASH,				/* / */
-[0x30]		=	HID_KEY_0,
-[0x31]		=	HID_KEY_1,
-[0x32]		=	HID_KEY_2,
-[0x33]		=	HID_KEY_3,
-[0x34]		=	HID_KEY_4,
-[0x35]		=	HID_KEY_5,
-[0x36]		=	HID_KEY_6,
-[0x37]		=	HID_KEY_7,
-[0x38]		=	HID_KEY_8,
-[0x39]		=	HID_KEY_9,
-[0x3a]		=	M_SHIFT | HID_KEY_SEMICOLON,		/* : */
-[0x3b]		=	HID_KEY_SEMICOLON,
-[0x3c]		=	M_SHIFT | HID_KEY_COMMA,		/* < */
-[0x3d]		=	HID_KEY_EQUAL,
-[0x3e]		=	M_SHIFT | HID_KEY_PERIOD,		/* > */
-[0x3f]		=	M_SHIFT | HID_KEY_SLASH,		/* ? */
+[0x20]		=	{ { HID_KEY_SPACE } },
+[0x21]		=	{ { M_SHIFT,				/* ! */
+			    M_SHIFT | HID_KEY_1,
+			    M_SHIFT } },
+[0x22]		=	{ { M_SHIFT,				/* " */
+			    M_SHIFT | HID_KEY_APOSTROPHE,
+			    M_SHIFT } },
+[0x23]		=	{ { M_SHIFT,				/* # */
+			    M_SHIFT | HID_KEY_3,
+			    M_SHIFT } },
+[0x24]		=	{ { M_SHIFT,				/* $ */
+			    M_SHIFT | HID_KEY_4,
+			    M_SHIFT } },
+[0x25]		=	{ { M_SHIFT,				/* % */
+			    M_SHIFT | HID_KEY_5,
+			    M_SHIFT } },
+[0x26]		=	{ { M_SHIFT,				/* & */
+			    M_SHIFT | HID_KEY_7,
+			    M_SHIFT } },
+[0x27]		=	{ { HID_KEY_APOSTROPHE } },
+[0x28]		=	{ { M_SHIFT,				/* ( */
+			    M_SHIFT | HID_KEY_9,
+			    M_SHIFT } },
+[0x29]		=	{ { M_SHIFT,				/* ) */
+			    M_SHIFT | HID_KEY_0,
+			    M_SHIFT } },
+[0x2a]		=	{ { M_SHIFT,				/* * */
+			    M_SHIFT | HID_KEY_8,
+			    M_SHIFT } },
+[0x2b]		=	{ { M_SHIFT,				/* + */
+			    M_SHIFT | HID_KEY_EQUAL,
+			    M_SHIFT } },
+[0x2c]		=	{ { HID_KEY_COMMA } },			/* , */
+[0x2d]		=	{ { HID_KEY_MINUS } },			/* - */
+[0x2e]		=	{ { HID_KEY_PERIOD } },			/* . */
+[0x2f]		=	{ { HID_KEY_SLASH } },			/* / */
+[0x30]		=	{ { HID_KEY_0 } },
+[0x31]		=	{ { HID_KEY_1 } },
+[0x32]		=	{ { HID_KEY_2 } },
+[0x33]		=	{ { HID_KEY_3 } },
+[0x34]		=	{ { HID_KEY_4 } },
+[0x35]		=	{ { HID_KEY_5 } },
+[0x36]		=	{ { HID_KEY_6 } },
+[0x37]		=	{ { HID_KEY_7 } },
+[0x38]		=	{ { HID_KEY_8 } },
+[0x39]		=	{ { HID_KEY_9 } },
+[0x3a]		=	{ { M_SHIFT,				/* : */
+			    M_SHIFT | HID_KEY_SEMICOLON,
+			    M_SHIFT } },
+[0x3b]		=	{ { HID_KEY_SEMICOLON } },
+[0x3c]		=	{ { M_SHIFT,				/* < */
+			    M_SHIFT | HID_KEY_COMMA,
+			    M_SHIFT } },
+[0x3d]		=	{ { HID_KEY_EQUAL } },
+[0x3e]		=	{ { M_SHIFT,				/* > */
+			    M_SHIFT | HID_KEY_PERIOD,
+			    M_SHIFT } },
+[0x3f]		=	{ { M_SHIFT,				/* ? */
+			    M_SHIFT | HID_KEY_SLASH,
+			    M_SHIFT } },
 
-[0x40]		=	M_SHIFT | HID_KEY_2,			/* @ */
-[0x41]		=	M_SHIFT | HID_KEY_A,
-[0x42]		=	M_SHIFT | HID_KEY_B,
-[0x43]		=	M_SHIFT | HID_KEY_C,
-[0x44]		=	M_SHIFT | HID_KEY_D,
-[0x45]		=	M_SHIFT | HID_KEY_E,
-[0x46]		=	M_SHIFT | HID_KEY_F,
-[0x47]		=	M_SHIFT | HID_KEY_G,
-[0x48]		=	M_SHIFT | HID_KEY_H,
-[0x49]		=	M_SHIFT | HID_KEY_I,
-[0x4a]		=	M_SHIFT | HID_KEY_J,
-[0x4b]		=	M_SHIFT | HID_KEY_K,
-[0x4c]		=	M_SHIFT | HID_KEY_L,
-[0x4d]		=	M_SHIFT | HID_KEY_M,
-[0x4e]		=	M_SHIFT | HID_KEY_N,
-[0x4f]		=	M_SHIFT | HID_KEY_O,
-[0x50]		=	M_SHIFT | HID_KEY_P,
-[0x51]		=	M_SHIFT | HID_KEY_Q,
-[0x52]		=	M_SHIFT | HID_KEY_R,
-[0x53]		=	M_SHIFT | HID_KEY_S,
-[0x54]		=	M_SHIFT | HID_KEY_T,
-[0x55]		=	M_SHIFT | HID_KEY_U,
-[0x56]		=	M_SHIFT | HID_KEY_V,
-[0x57]		=	M_SHIFT | HID_KEY_W,
-[0x58]		=	M_SHIFT | HID_KEY_X,
-[0x59]		=	M_SHIFT | HID_KEY_Y,
-[0x5a]		=	M_SHIFT | HID_KEY_Z,
-[0x5b]		=	HID_KEY_BRACKET_LEFT,			/* [ */
+[0x40]		=	{ { M_SHIFT,				/* @ */
+			    M_SHIFT | HID_KEY_2,
+			    M_SHIFT } },
+[0x41]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_A,
+			    M_SHIFT } },
+[0x42]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_B,
+			    M_SHIFT } },
+[0x43]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_C,
+			    M_SHIFT } },
+[0x44]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_D,
+			    M_SHIFT } },
+[0x45]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_E,
+			    M_SHIFT } },
+[0x46]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_F,
+			    M_SHIFT } },
+[0x47]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_G,
+			    M_SHIFT } },
+[0x48]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_H,
+			    M_SHIFT } },
+[0x49]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_I,
+			    M_SHIFT } },
+[0x4a]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_J,
+			    M_SHIFT } },
+[0x4b]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_K,
+			    M_SHIFT } },
+[0x4c]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_L,
+			    M_SHIFT } },
+[0x4d]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_M,
+			    M_SHIFT } },
+[0x4e]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_N,
+			    M_SHIFT } },
+[0x4f]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_O,
+			    M_SHIFT } },
+[0x50]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_P,
+			    M_SHIFT } },
+[0x51]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_Q,
+			    M_SHIFT } },
+[0x52]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_R,
+			    M_SHIFT } },
+[0x53]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_S,
+			    M_SHIFT } },
+[0x54]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_T,
+			    M_SHIFT } },
+[0x55]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_U,
+			    M_SHIFT } },
+[0x56]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_V,
+			    M_SHIFT } },
+[0x57]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_W,
+			    M_SHIFT } },
+[0x58]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_X,
+			    M_SHIFT } },
+[0x59]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_Y,
+			    M_SHIFT } },
+[0x5a]		=	{ { M_SHIFT,
+			    M_SHIFT | HID_KEY_Z,
+			    M_SHIFT } },
+[0x5b]		=	{ { HID_KEY_BRACKET_LEFT } },		/* [ */
 /* 0x5c */
-[0x5d]		=	HID_KEY_BRACKET_RIGHT,			/* ] */
-[0x5e]		=	M_SHIFT | HID_KEY_6,			/* ^ */
-[0x5f]		=	M_SHIFT | HID_KEY_MINUS,		/* _ */
+[0x5d]		=	{ { HID_KEY_BRACKET_RIGHT } },		/* ] */
+[0x5e]		=	{ { M_SHIFT,				/* ^ */
+			    M_SHIFT | HID_KEY_6,
+			    M_SHIFT } },
+[0x5f]		=	{ { M_SHIFT,				/* _ */
+			    M_SHIFT | HID_KEY_MINUS,
+			    M_SHIFT } },
 
 /* 0x60 */
-[0x61]		=	HID_KEY_A,
-[0x62]		=	HID_KEY_B,
-[0x63]		=	HID_KEY_C,
-[0x64]		=	HID_KEY_D,
-[0x65]		=	HID_KEY_E,
-[0x66]		=	HID_KEY_F,
-[0x67]		=	HID_KEY_G,
-[0x68]		=	HID_KEY_H,
-[0x69]		=	HID_KEY_I,
-[0x6a]		=	HID_KEY_J,
-[0x6b]		=	HID_KEY_K,
-[0x6c]		=	HID_KEY_L,
-[0x6d]		=	HID_KEY_M,
-[0x6e]		=	HID_KEY_N,
-[0x6f]		=	HID_KEY_O,
-[0x70]		=	HID_KEY_P,
-[0x71]		=	HID_KEY_Q,
-[0x72]		=	HID_KEY_R,
-[0x73]		=	HID_KEY_S,
-[0x74]		=	HID_KEY_T,
-[0x75]		=	HID_KEY_U,
-[0x76]		=	HID_KEY_V,
-[0x77]		=	HID_KEY_W,
-[0x78]		=	HID_KEY_X,
-[0x79]		=	HID_KEY_Y,
-[0x7a]		=	HID_KEY_Z,
-[0x7b]		=	M_SHIFT | HID_KEY_BRACKET_LEFT,		/* { */
+[0x61]		=	{ { HID_KEY_A } },
+[0x62]		=	{ { HID_KEY_B } },
+[0x63]		=	{ { HID_KEY_C } },
+[0x64]		=	{ { HID_KEY_D } },
+[0x65]		=	{ { HID_KEY_E } },
+[0x66]		=	{ { HID_KEY_F } },
+[0x67]		=	{ { HID_KEY_G } },
+[0x68]		=	{ { HID_KEY_H } },
+[0x69]		=	{ { HID_KEY_I } },
+[0x6a]		=	{ { HID_KEY_J } },
+[0x6b]		=	{ { HID_KEY_K } },
+[0x6c]		=	{ { HID_KEY_L } },
+[0x6d]		=	{ { HID_KEY_M } },
+[0x6e]		=	{ { HID_KEY_N } },
+[0x6f]		=	{ { HID_KEY_O } },
+[0x70]		=	{ { HID_KEY_P } },
+[0x71]		=	{ { HID_KEY_Q } },
+[0x72]		=	{ { HID_KEY_R } },
+[0x73]		=	{ { HID_KEY_S } },
+[0x74]		=	{ { HID_KEY_T } },
+[0x75]		=	{ { HID_KEY_U } },
+[0x76]		=	{ { HID_KEY_V } },
+[0x77]		=	{ { HID_KEY_W } },
+[0x78]		=	{ { HID_KEY_X } },
+[0x79]		=	{ { HID_KEY_Y } },
+[0x7a]		=	{ { HID_KEY_Z } },
+[0x7b]		=	{ { M_SHIFT,				/* { */
+			    M_SHIFT | HID_KEY_BRACKET_LEFT,
+			    M_SHIFT } },
 /* 0x7c */
-[0x7d]		=	M_SHIFT | HID_KEY_BRACKET_RIGHT,	/* } */
+[0x7d]		=	{ { M_SHIFT,				/* } */
+			    M_SHIFT | HID_KEY_BRACKET_RIGHT,
+			    M_SHIFT } },
 /* 0x7e */
-[0x7f]		=	HID_KEY_BACKSPACE,			/* DEL */
+[0x7f]		=	{ { HID_KEY_BACKSPACE } },		/* DEL */
 
-/* 0x80 - 0x8f */
-[0x90]		=	M_ERR | 1,				/* > 1 key */
-[0x91]		=	M_ERR | 2,				/* bad RAM */
-[0x92]		=	M_ERR | 3,				/* bad ROM */
-[0x93]		=	M_ERR | 4,				/* crash? */
-[0x94]		=	M_ERR | 5,				/* heartbeat */
-[0x95]		=	M_ERR | 6,				/* reboot */
-/* 0x96 - 0x9f */
+/* 0x80 - 0x9f */
 
 /* 0xa0 - 0xbf */
 
 /* 0xc0 - 0xdf */
 
-[0xe0]		=	M_DOWN | HID_KEY_ARROW_RIGHT,
-[0xe1]		=	M_DOWN | HID_KEY_ARROW_LEFT,
-[0xe2]		=	M_DOWN | HID_KEY_ARROW_DOWN,
-[0xe3]		=	M_DOWN | HID_KEY_ARROW_UP,
-[0xe4]		=	M_DOWN | HID_KEY_PAGE_DOWN,		/* |||> */
-[0xe5]		=	M_DOWN | HID_KEY_PAGE_UP,		/* <||| */
-[0xe6]		=	0 /* XXX */,				/* NO */
-[0xe7]		=	0 /* XXX */,				/* YES */
-[0xe8]		=	0 /* XXX */,				/* SYM */
-[0xe9]		=	M_DOWN | HID_KEY_PAUSE,			/* PAUSE */
-[0xea]		=	0 /* XXX */,				/* TV/NABU */
+[0xe0]		=	{ { M_DOWN | HID_KEY_ARROW_RIGHT } },
+[0xe1]		=	{ { M_DOWN | HID_KEY_ARROW_LEFT } },
+[0xe2]		=	{ { M_DOWN | HID_KEY_ARROW_DOWN } },
+[0xe3]		=	{ { M_DOWN | HID_KEY_ARROW_UP } },
+[0xe4]		=	{ { M_DOWN | HID_KEY_PAGE_DOWN } },	/* |||> */
+[0xe5]		=	{ { M_DOWN | HID_KEY_PAGE_UP } },	/* <||| */
+[0xe6]		=	{ { 0 /* XXX */ } },			/* NO */
+[0xe7]		=	{ { 0 /* XXX */ } },			/* YES */
+[0xe8]		=	{ { 0 /* XXX */ } },			/* SYM */
+[0xe9]		=	{ { M_DOWN | HID_KEY_PAUSE } },		/* PAUSE */
+[0xea]		=	{ { 0 /* XXX */ } },			/* TV/NABU */
 /* 0xeb - 0xef */
-[0xf0]		=	M_UP | HID_KEY_ARROW_RIGHT,
-[0xf1]		=	M_UP | HID_KEY_ARROW_LEFT,
-[0xf2]		=	M_UP | HID_KEY_ARROW_DOWN,
-[0xf3]		=	M_UP | HID_KEY_ARROW_UP,
-[0xf4]		=	M_UP | HID_KEY_PAGE_DOWN,		/* |||> */
-[0xf5]		=	M_UP | HID_KEY_PAGE_UP,			/* <||| */
-[0xf6]		=	0 /* XXX */,				/* NO */
-[0xf7]		=	0 /* XXX */,				/* YES */
-[0xf8]		=	0 /* XXX */,				/* SYM */
-[0xf9]		=	M_UP | HID_KEY_PAUSE,			/* PAUSE */
-[0xfa]		=	0 /* XXX */,				/* TV/NABU */
+[0xf0]		=	{ { M_UP | HID_KEY_ARROW_RIGHT } },
+[0xf1]		=	{ { M_UP | HID_KEY_ARROW_LEFT } },
+[0xf2]		=	{ { M_UP | HID_KEY_ARROW_DOWN } },
+[0xf3]		=	{ { M_UP | HID_KEY_ARROW_UP } },
+[0xf4]		=	{ { M_UP | HID_KEY_PAGE_DOWN } },	/* |||> */
+[0xf5]		=	{ { M_UP | HID_KEY_PAGE_UP } },		/* <||| */
+[0xf6]		=	{ { 0 /* XXX */ } },			/* NO */
+[0xf7]		=	{ { 0 /* XXX */ } },			/* YES */
+[0xf8]		=	{ { 0 /* XXX */ } },			/* SYM */
+[0xf9]		=	{ { M_UP | HID_KEY_PAUSE } },		/* PAUSE */
+[0xfa]		=	{ { 0 /* XXX */ } },			/* TV/NABU */
 /* 0xfb - 0xff */
 };
 
@@ -465,14 +624,14 @@ send_joy_report(int which, uint8_t data)
 
 static struct {
 	struct queue queue;
-	bool want_keyup;
+	const uint16_t *next;
 } kbd_context;
 
 static void
 kbd_init(void)
 {
 	queue_init(&kbd_context.queue);
-	kbd_context.want_keyup = false;
+	kbd_context.next = NULL;
 }
 
 static inline uint8_t
@@ -517,8 +676,9 @@ hid_task(void)
 	 * work to do.
 	 */
 	bool have_work = false;
-	if (kbd_context.want_keyup) {
-		printf("DEBUG: %s: want_keyup, have_work -> true\n", __func__);
+	if (kbd_context.next != NULL) {
+		printf("DEBUG: %s: next != NULL, have_work -> true\n",
+		    __func__);
 		have_work = true;
 	}
 	if (! QUEUE_EMPTY_P(&kbd_context.queue)) {
@@ -554,19 +714,30 @@ hid_task(void)
 	}
 
 	if (tud_hid_n_ready(ITF_NUM_KBD)) {
-		if (kbd_context.want_keyup) {
-			kbd_context.want_keyup = false;
-			send_kbd_report(HID_KEY_NONE);
-		} else if (queue_get(&kbd_context.queue, &c)) {
-			uint16_t code = nabu_to_hid[c];
+		uint16_t code;
 
-			printf("Got '%c' (code=0x%04x)\n", c, code);
+		if (kbd_context.next != NULL) {
+			code = *kbd_context.next++;
+			if (code == 0) {
+				/* Last code in the sequence - key up. */
+				kbd_context.next = NULL;
+			}
+			printf("DEBUG: %s: next code in sequence: 0x%04x\n",
+			    __func__, code);
+			send_kbd_report(code);
+		} else if (queue_get(&kbd_context.queue, &c)) {
+			const uint16_t *sequence = nabu_to_hid[c].codes;
+			code = sequence[0];
 			if (code != 0) {
-				kbd_context.want_keyup =
-				    (code & (M_UP | M_DOWN)) == 0;
-				printf("DEBUG: %s: want_keyup = %d\n",
-				    __func__, kbd_context.want_keyup);
+				printf("DEBUG: %s: got 0x%02x\n", __func__, c);
+				/* UP/DOWN keys don't use a sequence. */
+				if ((code & (M_UP | M_DOWN)) == 0) {
+					kbd_context.next = &sequence[1];
+				}
 				send_kbd_report(code);
+			} else {
+				printf("DEBUG: %s: ignoring 0x%02x\n",
+				    __func__, c);
 			}
 		}
 	} else {
@@ -664,25 +835,22 @@ tud_hid_set_report_cb(uint8_t itf, uint8_t report_id,
 	(void) bufsize;
 }
 
-/*
- * This function runs on Core 1, sucks down bytes from the UART
- * in a tight loop, and pushes them into the appropriate queue.
- */
-static void
-nabu_keyboard_reader(void)
+static inline uint8_t
+kbd_getc(void)
 {
-	int joy_instance = -1;
-	uint8_t c;
-
+#ifdef SIMULATE_KEYSTROKES
 	static int start_ms = 0;
 	static int state = 0;
 	static const char str[] = "Oink!\n";
 	int idx;
+	uint8_t c;
+
+	/*
+	 * 5 second delay, then a simulated keystroke once per second
+	 * until the end of the simulated sequence.
+	 */
 
 	for (;;) {
-#if 0
-		c = uart_getc(uart1);
-#else
 		if (board_millis() - start_ms < 1000) {
 			continue;
 		}
@@ -696,14 +864,28 @@ nabu_keyboard_reader(void)
 		idx = state - 5;
 		c = str[idx];
 		if (c != '\0') {
-			printf("Injecting '%c'\n", c);
-			queue_add(&kbd_context.queue, c);
+			printf("DEBUG: %s: Injecting '%c'\n", __func__, c);
 			state++;
-			continue;
-		} else {
-			continue;
+			return c;
 		}
-#endif
+	}
+#else
+	return uart_getc(uart1);
+#endif /* SIMULATE_KEYSTROKES */
+}
+
+/*
+ * This function runs on Core 1, sucks down bytes from the UART
+ * in a tight loop, and pushes them into the appropriate queue.
+ */
+static void
+nabu_keyboard_reader(void)
+{
+	int joy_instance = -1;
+	uint8_t c;
+
+	for (;;) {
+		c = kbd_getc();
 
 		/* Check for a joystick instance. */
 		if (c == NABU_CODE_JOY0 || c == NABU_CODE_JOY1) {
@@ -734,7 +916,7 @@ nabu_keyboard_reader(void)
 		 * bother to enqueue it if there's no action that
 		 * will be taken.
 		 */
-		if (nabu_to_hid[c] != 0) {
+		if (nabu_to_hid[c].codes[0] != 0) {
 			queue_add(&kbd_context.queue, c);
 		}
 	}
