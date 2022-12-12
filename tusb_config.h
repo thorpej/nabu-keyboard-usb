@@ -39,4 +39,16 @@
 
 #define	CFG_TUD_HID	3	/* we have 3 interfaces */
 
+#define	USB_VID		0x4160	/* @thorpej */
+#define	USB_PID		0x0000	/* NABU Keyboard -> USB Adapter */
+
+enum {
+	ITF_NUM_KBD	= 0,
+#if 0
+	ITF_NUM_JOY0	= 1,
+	ITF_NUM_JOY1	= 2,
+#endif
+	ITF_NUM_TOTAL
+};
+
 #endif /* _TUSB_CONFIG_H_ */

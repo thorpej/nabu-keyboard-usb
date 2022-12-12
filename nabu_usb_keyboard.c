@@ -69,6 +69,13 @@
 /* Local headers */
 
 /*
+ * GPIO pins 4 and 5 are used for UART1 TX and RX, respectively.
+ * This maps to physical pins 6 and 7 on the DIP-40 Pico.
+ */
+#define	UART1_TX_PIN		4
+#define	UART1_RX_PIN		5
+
+/*
  * Circular queue between the the UART receiver and the USB sender.
  */
 
@@ -127,11 +134,13 @@ queue_consume(struct queue *q, uint8_t *vp, bool advance)
 	return rv;
 }
 
+#if 0
 static bool
 queue_peek(struct queue *q, uint8_t *vp)
 {
 	return queue_consume(q, vp, false);
 }
+#endif
 
 static bool
 queue_get(struct queue *q, uint8_t *vp)
@@ -164,10 +173,28 @@ led_task(void)
 	led_state ^= true;
 }
 
-/*
- * We only want to have one report chain running at a time.
- */
-static bool report_chain_running;
+#ifdef SLOW_TWIDDLE
+#define	TWIDDLE_DELAY	4
+#else
+#define	TWIDDLE_DELAY	0
+#endif
+
+#define	TWIDDLE_MASK	((1 << TWIDDLE_DELAY) - 1)
+
+static void
+twiddle(void)
+{
+	static unsigned int pos;
+	static const char twiddle_chars[] = "|/-\\";
+
+	if ((pos & TWIDDLE_MASK) == 0) {
+		uart_putc(uart0, twiddle_chars[(pos >> TWIDDLE_DELAY) & 3]);
+		uart_putc(uart0, '\b');
+	}
+	pos++;
+}
+
+static bool want_remote_wakeup = false;
 
 /*
  * Map NABU keycodes to HID key codes.
@@ -403,25 +430,18 @@ static const uint8_t joy_to_dpad[JOY_DIR_MASK + 1] = {
 [JOY_UP | JOY_LEFT]	=	GAMEPAD_HAT_UP_LEFT,
 };
 
-typedef enum {
-	JOY_STATE_IDLE		= 0,
-	JOY_STATE_REPORTING	= 1,
-} joy_state_t;
-
 /*
  * We keep 2 joystick contexts so we can report "simultaneous" movements
  * on both sticks more accurately, but we still need to have a global for
  * the "instance" we're processing while the data is coming in.
  */
 static struct joy_context {
-	joy_state_t state;
 	struct queue queue;
 } joy_context[2];
 
 static void
 joy_init(int which)
 {
-	joy_context[which].state = JOY_STATE_IDLE;
 	queue_init(&joy_context[which].queue);
 }
 
@@ -437,49 +457,32 @@ send_joy_report(int which, uint8_t data)
 		.buttons	=	buttons,
 	};
 
-	joy_context[which].state = JOY_STATE_REPORTING;
-	report_chain_running = true;
-
-	tud_hid_report(which ? REPORT_ID_JOY1 : REPORT_ID_JOY0,
-	    &report, sizeof(report));
+	tud_hid_n_report(ITF_NUM_JOY0 + which, 0, &report, sizeof(report));
 #endif
 }
 
-typedef enum {
-	KBD_STATE_IDLE		= 0,
-	KBD_STATE_REPORTING	= 1,
-	KBD_STATE_WANT_KEYUP	= 2,
-} kbd_state_t;
-
 static struct {
-	kbd_state_t state;
 	struct queue queue;
-	uint16_t code;
+	bool want_keyup;
 } kbd_context;
 
 static void
 kbd_init(void)
 {
-	kbd_context.state = KBD_STATE_IDLE;
-	kbd_context.code = 0;
 	queue_init(&kbd_context.queue);
+	kbd_context.want_keyup = false;
 }
 
 static inline uint8_t
 keymod_to_hid(uint16_t code)
 {
-#if 0
 	return (code >> 8) &
 	    (KEYBOARD_MODIFIER_LEFTCTRL | KEYBOARD_MODIFIER_LEFTSHIFT);
-#else
-	return 0;
-#endif
 }
 
 static void
 send_kbd_report(uint16_t code)
 {
-#if 0
 	uint8_t keymod = keymod_to_hid(code);
 	uint8_t keycode = (uint8_t)code;
 
@@ -488,44 +491,10 @@ send_kbd_report(uint16_t code)
 		.keycode	=	{ [0] = keycode },
 	};
 
-	kbd_context.state = KBD_STATE_REPORTING;
-	kbd_context.code = code;
-	report_chain_running = true;
-
-	tud_hid_report(REPORT_ID_KBD, &report, sizeof(report));
-#endif
+	tud_hid_n_report(ITF_NUM_KBD, 0, &report, sizeof(report));
 }
 
 #define	REPORT_INTERVAL_MS	10
-
-/*
- * This is factored out of hid_task() because it's also needed by
- * tud_hid_report_complete_cb().
- */
-static bool
-joy_hid_task(int which)
-{
-	uint8_t c;
-
-	switch (joy_context[which].state) {
-	case JOY_STATE_IDLE:
-		if (queue_get(&joy_context[which].queue, &c)) {
-			send_joy_report(which, c);
-			return true;
-		}
-		break;
-
-	case JOY_STATE_REPORTING:
-		return true;
-
-	default:
-		printf("!!! INVALID joy_context[%d].state %d !!!\n",
-		    which, joy_context[which].state);
-		joy_context[which].state = JOY_STATE_IDLE;
-	}
-
-	return false;
-}
 
 static void
 hid_task(void)
@@ -545,59 +514,152 @@ hid_task(void)
 	 * Quick unlocked queue-empty checks to see if there's
 	 * work to do.
 	 */
-	if (QUEUE_EMPTY_P(&kbd_context.queue) &&
-	    QUEUE_EMPTY_P(&joy_context[0].queue) &&
-	    QUEUE_EMPTY_P(&joy_context[1].queue)) {
+	bool have_work = false;
+	if (kbd_context.want_keyup) {
+		printf("DEBUG: %s: want_keyup, have_work -> true\n", __func__);
+		have_work = true;
+	}
+	if (! QUEUE_EMPTY_P(&kbd_context.queue)) {
+		printf("DEBUG: %s: kbd queue, have_work -> true\n", __func__);
+		have_work = true;
+	}
+	if (! QUEUE_EMPTY_P(&joy_context[0].queue)) {
+		printf("DEBUG: %s: joy0 queue, have_work -> true\n", __func__);
+		have_work = true;
+	}
+	if (! QUEUE_EMPTY_P(&joy_context[1].queue)) {
+		printf("DEBUG: %s: joy1 queue, have_work -> true\n", __func__);
+		have_work = true;
+	}
+
+	if (! have_work) {
 		/* No data to send. */
 		/* XXX Do we need to send reports always? */
 		return;
 	}
 
-#if 0
 	/*
 	 * We have at least one report to send.  If we're suspended,
 	 * wake up the host.  We'll send the report the next time
 	 * around.
 	 */
 	if (tud_suspended()) {
-		tud_remote_wakeup();
-		return;
-	}
-#endif
-
-	/*
-	 * The keyboard is the lowest report ID, so kick that one off
-	 * first.  Any outstanding joystick data will be sent after.
-	 */
-	switch (kbd_context.state) {
-	case KBD_STATE_IDLE:
-		if (queue_get(&kbd_context.queue, &c) &&
-		    nabu_to_hid[c] != 0) {
-			send_kbd_report(nabu_to_hid[c]);
-			return;
+		if (want_remote_wakeup) {
+			tud_remote_wakeup();
+			want_remote_wakeup = false;
 		}
-		/* Give joysticks a chance. */
-		break;
-
-	case KBD_STATE_REPORTING:
 		return;
-
-	case KBD_STATE_WANT_KEYUP:
-		send_kbd_report(/*HID_KEY_NONE*/0);
-		return;
-
-	default:
-		printf("!!! INVALID kbd_context.state %d !!!\n",
-		    kbd_context.state);
-		kbd_context.state = KBD_STATE_IDLE;
 	}
 
+	if (tud_hid_n_ready(ITF_NUM_KBD)) {
+		if (kbd_context.want_keyup) {
+			kbd_context.want_keyup = false;
+			send_kbd_report(HID_KEY_NONE);
+		} else if (queue_get(&kbd_context.queue, &c)) {
+			uint16_t code = nabu_to_hid[c];
+
+			printf("Got '%c' (code=0x%04x)\n", c, code);
+			if (code != 0) {
+				kbd_context.want_keyup =
+				    (code & (M_UP | M_DOWN)) == 0;
+				printf("DEBUG: %s: want_keyup = %d\n",
+				    __func__, kbd_context.want_keyup);
+				send_kbd_report(code);
+			}
+		}
+	} else {
+		twiddle();
+	}
+
+#if 0
 	/* Now do the joysticks. */
 	for (int i = 0; i < 2; i++) {
-		if (joy_hid_task(i)) {
-			return;
+		if (tud_hid_n_ready(ITF_NUM_JOY0 + i)) {
+			if (queue_get(&joy_context[which].queue, &c)) {
+				send_joy_report(which, c);
+			}
 		}
 	}
+#endif
+}
+
+/*
+ * Invoked when the device is "mounted".
+ */
+void
+tud_mount_cb(void)
+{
+	blink_interval_ms = BLINK_MOUNTED;
+}
+
+/*
+ * Invoked when the device is "unmounted".
+ */
+void
+tud_umount_cb(void)
+{
+	blink_interval_ms = BLINK_NOT_MOUNTED;
+}
+
+/*
+ * Invoked when the USB bus is suspended.
+ *
+ * remote_wakeup_en indicates if the host allows us to perform a
+ * remote wakeup.
+ *
+ * Within 7ms, we must drop our current draw to less than 2.5mA from
+ * the bus.  Not a problem, since we require an external power source
+ * for the keyboard anyway.
+ */
+void
+tud_suspend_cb(bool remote_wakeup_en)
+{
+	want_remote_wakeup = remote_wakeup_en;
+	blink_interval_ms = BLINK_SUSPENDED;
+}
+
+/*
+ * Invoked when the USB bus is resumed.
+ */
+void
+tud_resume_cb(void)
+{
+	blink_interval_ms = BLINK_MOUNTED;
+}
+
+/*
+ * Invoked when received GET_REPORT control request.
+ * Application must fill buffer report's content and return its length.
+ * Return zero will cause the stack to STALL request.
+ */
+uint16_t
+tud_hid_get_report_cb(uint8_t itf, uint8_t report_id,
+    hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen)
+{
+	// TODO not Implemented
+	(void) itf;
+	(void) report_id; 
+	(void) report_type;
+	(void) buffer;
+	(void) reqlen;
+
+	return 0;
+}
+
+/*
+ * Invoked when received SET_REPORT control request or
+ * received data on OUT endpoint ( Report ID = 0, Type = 0 )
+ */
+void
+tud_hid_set_report_cb(uint8_t itf, uint8_t report_id,
+    hid_report_type_t report_type, uint8_t const* buffer, uint16_t bufsize)
+{
+	// TODO set LED based on CAPLOCK, NUMLOCK etc...
+	(void) itf;
+	(void) report_id;
+	(void) report_type;
+	(void) buffer;
+	(void) bufsize;
 }
 
 /*
@@ -610,8 +672,34 @@ nabu_keyboard_reader(void)
 	int joy_instance = -1;
 	uint8_t c;
 
+	static int start_ms = 0;
+	static int state = 0;
+	static const char str[] = "The quick brown fox jumps over the lazy dog.\n";
+	int idx;
+
 	for (;;) {
+#if 0
 		c = uart_getc(uart1);
+#else
+		if (board_millis() - start_ms < 1000) {
+			continue;
+		}
+
+		start_ms += 1000;
+		if (state < 5) {
+			state++;
+			continue;
+		}
+
+		idx = state - 5;
+		c = str[idx];
+		if (c != '\0') {
+			printf("Injecting '%c'\n", c);
+			queue_add(&kbd_context.queue, c);
+			state++;
+			continue;
+		}
+#endif
 
 		/* Check for a joystick instance. */
 		if (c == NABU_CODE_JOY0 || c == NABU_CODE_JOY1) {
@@ -622,7 +710,7 @@ nabu_keyboard_reader(void)
 
 		/* Check for joystick data. */
 		if (c >= NABU_CODE_JOYDAT_FIRST &&
-		    c >= NABU_CODE_JOYDAT_LAST) {
+		    c <= NABU_CODE_JOYDAT_LAST) {
 			if (joy_instance < 0) {
 				/* Unexpected; discard data. */
 				continue;
@@ -648,43 +736,6 @@ nabu_keyboard_reader(void)
 	}
 }
 
-#if 0
-/*
- * Invoked when a report is sent successfully to the host.
- * This is used to send the next report.
- *
- * For composite reports, report[0] is the report ID, which we use
- * to determine which to do next.
- */
-void
-tud_hid_report_complete_cb(uint8_t instance, uint8_t *report, uint8_t len)
-{
-	switch (report[0]) {
-	case REPORT_ID_KEYBOARD:
-		/*
-		 * If we just sent a "regular" key, we need to schedule
-		 * the key-up event.
-		 */
-		if ((kbd_context.code & (M_DOWN | M_UP)) == 0) {
-			kbd_context.state = KBD_STATE_WANT_KEYUP;
-		} else {
-			kbd_context.state = KBD_STATE_IDLE;
-		}
-
-		/* Next in the chain: joystick 0 */
-		joy_hid_task(0);
-		break;
-
-	case REPORT_ID_JOY0:
-
-	case REPORT_ID_JOY1:
-		/* This was the last report in the chain. */
-		report_chain_running = false;
-		break;
-	}
-}
-#endif
-
 #define	VERSION_MAJOR	0
 #define	VERSION_MINOR	1
 
@@ -701,6 +752,8 @@ main(void)
 	printf("Copyright (c) 2022 Jason R. Thorpe\n\n");
 
 	printf("Initializing UART1 (NABU keyboard).\n");
+	gpio_set_function(UART1_TX_PIN, GPIO_FUNC_UART);
+	gpio_set_function(UART1_RX_PIN, GPIO_FUNC_UART);
 	actual_baud = uart_init(uart1, NABU_KBD_BAUDRATE);
 	if (actual_baud != NABU_KBD_BAUDRATE) {
 		printf("WARNING: UART1 actual baud rate %u != %u\n",
@@ -727,7 +780,7 @@ main(void)
 
 	printf("Entering main loop!\n");
 	for (;;) {
-		// tud_task();		/* TinyUSB device task */
+		tud_task();		/* TinyUSB device task */
 		led_task();		/* heartbeat LED */
 		hid_task();		/* HID processing */
 	}

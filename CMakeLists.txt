@@ -15,6 +15,7 @@ pico_sdk_init()
 
 add_executable(nabu_usb_keyboard
 	nabu_usb_keyboard.c
+	usb_descriptors.c
 	)
 
 target_link_libraries(nabu_usb_keyboard
