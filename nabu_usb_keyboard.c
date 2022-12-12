@@ -58,6 +58,7 @@
 #include "pico/stdlib.h"
 #include "pico/printf.h"
 #include "pico/sync.h"
+#include "pico/time.h"
 #include "pico/multicore.h"
 #include "hardware/uart.h"
 
@@ -161,6 +162,14 @@ queue_get(struct queue *q, uint8_t *vp)
 	return queue_consume(q, vp, true);
 }
 
+static void
+queue_drain(struct queue *q)
+{
+	mutex_enter_blocking(&q->mutex);
+	q->prod = q->cons = 0;
+	mutex_exit(&q->mutex);
+}
+
 /*
  * Standard TinyUSB example LED blink pattern.
  */
@@ -184,27 +193,6 @@ led_task(void)
 
 	board_led_write(led_state);
 	led_state ^= true;
-}
-
-#ifdef SLOW_TWIDDLE
-#define	TWIDDLE_DELAY	4
-#else
-#define	TWIDDLE_DELAY	0
-#endif
-
-#define	TWIDDLE_MASK	((1 << TWIDDLE_DELAY) - 1)
-
-static void
-twiddle(void)
-{
-	static unsigned int pos;
-	static const char twiddle_chars[] = "|/-\\";
-
-	if ((pos & TWIDDLE_MASK) == 0) {
-		uart_putc(uart0, twiddle_chars[(pos >> TWIDDLE_DELAY) & 3]);
-		uart_putc(uart0, '\b');
-	}
-	pos++;
 }
 
 static bool want_remote_wakeup = false;
@@ -240,6 +228,19 @@ static bool want_remote_wakeup = false;
 #define	NABU_CODE_ERR_LAST	0x95
 #define	NABU_CODE_JOYDAT_FIRST	0xa0
 #define	NABU_CODE_JOYDAT_LAST	0xbf
+
+#define	NABU_CODE_JOYDAT_P(c)	((c) >= NABU_CODE_JOYDAT_FIRST &&	\
+				 (c) <= NABU_CODE_JOYDAT_LAST)
+
+#define	NABU_CODE_ERR_P(c)	((c) >= NABU_CODE_ERR_FIRST &&		\
+				 (c) <= NABU_CODE_ERR_LAST)
+
+#define	NABU_CODE_ERR_MKEY	0x90	/* multiple keys pressed */
+#define	NABU_CODE_ERR_RAM	0x91	/* faulty keyboard RAM */
+#define	NABU_CODE_ERR_ROM	0x92	/* faulty keyboard ROM */
+#define	NABU_CODE_ERR_ISR	0x93	/* illegal ISR (?) */
+#define	NABU_CODE_ERR_PING	0x94	/* periodic no-load ping */
+#define	NABU_CODE_ERR_RESET	0x95	/* keyboard power-up/reset */
 
 #define	NABU_KBD_BAUDRATE	6992
 
@@ -607,12 +608,14 @@ static const uint8_t joy_to_dpad[JOY_DIR_MASK + 1] = {
  */
 static struct joy_context {
 	struct queue queue;
+	bool zombie;
 } joy_context[2];
 
 static void
 joy_init(int which)
 {
 	queue_init(&joy_context[which].queue);
+	joy_context[which].zombie = false;
 }
 
 static void
@@ -634,6 +637,7 @@ send_joy_report(int which, uint8_t data)
 static struct {
 	struct queue queue;
 	const uint16_t *next;
+	bool zombie;
 } kbd_context;
 
 static void
@@ -641,6 +645,7 @@ kbd_init(void)
 {
 	queue_init(&kbd_context.queue);
 	kbd_context.next = NULL;
+	kbd_context.zombie = false;
 }
 
 static inline uint8_t
@@ -664,17 +669,128 @@ send_kbd_report(uint16_t code)
 	tud_hid_n_report(ITF_NUM_KBD, 0, &report, sizeof(report));
 }
 
+/*
+ * The reader thread updates this timestamp each time it gets a
+ * byte from the keyboard.
+ */
+static volatile uint32_t last_kbd_message_time;	/* in milliseconds */
+
+static void
+kbd_setpower(bool enabled)
+{
+	/* XXX */
+}
+
+static void
+kbd_reboot(void)
+{
+	/* Power down the keyboard. */
+	kbd_setpower(false);
+
+	/* Wait for 500ms. */
+	sleep_ms(500);
+
+	/* Reset all of the queues. */
+	queue_drain(&kbd_context.queue);
+	queue_drain(&joy_context[0].queue);
+	queue_drain(&joy_context[1].queue);
+
+	/*
+	 * Pretend we got a message while we wait for the power-up
+	 * packet.
+	 */
+	last_kbd_message_time = board_millis();
+
+	/*
+	 * hid_task() will see these later and rectify any zombie state
+	 * the host has.
+	 */
+	kbd_context.zombie =
+	    joy_context[0].zombie = joy_context[1].zombie = true;
+
+	/* Power up the keyboard. */
+	kbd_setpower(true);
+}
+
+#define	DEADCHECK_WARN_MS	5000
+#define	DEADCHECK_DECLARE_MS	8000
+
+static bool
+kbd_deadcheck(uint32_t now)
+{
+
+	if (now - last_kbd_message_time < DEADCHECK_WARN_MS) {
+		return false;
+	}
+
+	if (now - last_kbd_message_time < DEADCHECK_DECLARE_MS) {
+		printf("WARNING: keyboard failed to ping.\n");
+		return false;
+	}
+
+	/* Declare the keyboard dead and reboot it. */
+	printf("ERROR: keyboard appears dead, rebooting...\n");
+	kbd_reboot();
+	return true;
+}
+
+static bool
+kbd_err_task(uint8_t c)
+{
+	switch (c) {
+	case NABU_CODE_ERR_MKEY:
+		printf("INFO: %s: multi-keypress, sending HID_KEY_NONE.\n",
+		    __func__);
+		send_kbd_report(HID_KEY_NONE);
+		return false;
+
+	case NABU_CODE_ERR_RAM:
+		printf("ERROR: %s: keyboard RAM error, rebooting...\n",
+		     __func__);
+		break;
+
+	case NABU_CODE_ERR_ROM:
+		printf("ERROR: %s: keyboard ROM error, rebooting...\n",
+		     __func__);
+		break;
+
+	case NABU_CODE_ERR_ISR:
+		printf("ERROR: %s: keyboard ISR error, rebooting...\n",
+		     __func__);
+		break;
+
+	case NABU_CODE_ERR_PING:
+		debug_printf("DEBUG: %s: received PING from keyboard.\n",
+		    __func__);
+		return false;
+
+	case NABU_CODE_ERR_RESET:
+		printf("INFO: received RESET notification from keyboard.\n",
+		    __func__);
+		return false;
+
+	default:
+		/* This won't ever happen; just ignore. */
+		return false;
+	}
+
+	/* If we got here, we're rebooting the keyboard. */
+	kbd_reboot();
+	return true;
+}
+
 #define	REPORT_INTERVAL_MS	10
 
 static void
 hid_task(void)
 {
+	uint32_t now;
 	uint8_t c;
 
 	/* This is good for ~139 years of uptime. */
 	static uint32_t start_ms;
 
-	if (board_millis() - start_ms < REPORT_INTERVAL_MS) {
+	if ((now = board_millis()) - start_ms < REPORT_INTERVAL_MS) {
 		return;
 	}
 
@@ -685,6 +801,11 @@ hid_task(void)
 	 * work to do.
 	 */
 	bool have_work = false;
+	if (kbd_deadcheck(now)) {
+		debug_printf("DEBUG: %s: deadcheck, have_work -> true\n",
+		    __func__);
+		have_work = true;
+	}
 	if (kbd_context.next != NULL) {
 		debug_printf("DEBUG: %s: next != NULL, have_work -> true\n",
 		    __func__);
@@ -736,13 +857,25 @@ hid_task(void)
 			debug_printf("DEBUG: %s: next in sequence: 0x%04x\n",
 			    __func__, code);
 			send_kbd_report(code);
+		} else if (kbd_context.zombie) {
+			/*
+			 * We let any outstanding sequence complete, but
+			 * we do one more key-up event in case there is
+			 * other state latched by the host.
+			 */
+			debug_printf("DEBUG: %s: clearing zombie state.\n");
+			send_kbd_report(HID_KEY_NONE);
+			kbd_context.zombie = false;
 		} else if (queue_get(&kbd_context.queue, &c)) {
 			const uint16_t *sequence = nabu_to_hid[c].codes;
-
-			/* XXX errors / heartbeat */
-
 			code = sequence[0];
-			if (code != 0) {
+
+			if (NABU_CODE_ERR_P(c)) {
+				if (kbd_err_task(c)) {
+					/* Error message already displayed. */
+					return;
+				}
+			} else if (code != 0) {
 				debug_printf("DEBUG: %s: got 0x%02x\n",
 				    __func__, c);
 				/* UP/DOWN keys don't use a sequence. */
@@ -765,15 +898,16 @@ hid_task(void)
 				    __func__, c);
 			}
 		}
-	} else {
-		twiddle();
 	}
 
 #if 0
 	/* Now do the joysticks. */
 	for (int i = 0; i < 2; i++) {
 		if (tud_hid_n_ready(ITF_NUM_JOY0 + i)) {
-			if (queue_get(&joy_context[which].queue, &c)) {
+			if (joy_context[which].zombie) {
+				send_joy_report(which, 0);
+				joy_context[which].zombie = false;
+			} else if (queue_get(&joy_context[which].queue, &c)) {
 				send_joy_report(which, c);
 			}
 		}
@@ -863,41 +997,49 @@ tud_hid_set_report_cb(uint8_t itf, uint8_t report_id,
 static inline uint8_t
 kbd_getc(void)
 {
-#ifdef SIMULATE_KEYSTROKES
-	static int start_ms = 0;
-	static int state = 0;
-	static const char str[] = "Oink!\n";
-	int idx;
+	uint32_t now;
 	uint8_t c;
 
+#ifdef SIMULATE_KEYSTROKES
+	static int start_ms = 0;
+	static int idx = 0;
+	static const char str[] = "Oink!\n";
+
 	/*
-	 * 5 second delay, then a simulated keystroke once per second
-	 * until the end of the simulated sequence.
+	 * 4 second delay, then a simulated reset, another 1 second delay,
+	 * then simulated keystroke once per second until the end of the
+	 * simulated sequence.  After that, we just send the ping every
+	 * 4 seconds.
 	 */
 
 	for (;;) {
-		if (board_millis() - start_ms < 1000) {
+		if ((now = board_millis()) - start_ms < 1000) {
 			continue;
 		}
 
 		start_ms += 1000;
-		if (state < 5) {
-			state++;
-			continue;
-		}
 
-		idx = state - 5;
-		c = str[idx];
-		if (c != '\0') {
+		if (start_ms == 4000) {
+			debug_printf("DEBUG: %s: Injecting ERR_RESET\n");
+			c = NABU_CODE_ERR_RESET;
+		} else if (start_ms >= 5000 && (c = str[idx]) != '\0') {
 			debug_printf("DEBUG: %s: Injecting '%c'\n",
 			    __func__, c);
-			state++;
-			return c;
+			idx++;
+		} else if ((start_ms % 4000) == 0) {
+			debug_printf("DEBUG: %s: Injecting ERR_PING\n");
+			c = NABU_CODE_ERR_PING;
+		} else {
+			continue;
 		}
 	}
 #else
-	return uart_getc(uart1);
+	c = uart_getc(uart1);
+	now = board_millis();
 #endif /* SIMULATE_KEYSTROKES */
+
+	last_kbd_message_time = now;
+	return c;
 }
 
 /*
@@ -921,8 +1063,7 @@ nabu_keyboard_reader(void)
 		}
 
 		/* Check for joystick data. */
-		if (c >= NABU_CODE_JOYDAT_FIRST &&
-		    c <= NABU_CODE_JOYDAT_LAST) {
+		if (NABU_CODE_JOYDAT_P(c)) {
 			if (joy_instance < 0) {
 				/* Unexpected; discard data. */
 				continue;
@@ -942,7 +1083,7 @@ nabu_keyboard_reader(void)
 		 * bother to enqueue it if there's no action that
 		 * will be taken.
 		 */
-		if (nabu_to_hid[c].codes[0] != 0) {
+		if (nabu_to_hid[c].codes[0] != 0 || NABU_CODE_ERR_P(c)) {
 			queue_add(&kbd_context.queue, c);
 		}
 	}
@@ -963,6 +1104,9 @@ main(void)
 	    VERSION_MAJOR, VERSION_MINOR);
 	printf("Copyright (c) 2022 Jason R. Thorpe\n\n");
 
+	printf("Disabling keyboard power.\n");
+	kbd_setpower(false);
+
 	printf("Initializing UART1 (NABU keyboard).\n");
 	gpio_set_function(UART1_TX_PIN, GPIO_FUNC_UART);
 	gpio_set_function(UART1_RX_PIN, GPIO_FUNC_UART);
@@ -977,10 +1121,10 @@ main(void)
 	printf("Initializing USB stack.\n");
 	tusb_init();
 
-	printf("Initializing keyboard.\n");
+	printf("Initializing keyboard state.\n");
 	kbd_init();
 
-	printf("Initializing joysticks.\n");
+	printf("Initializing joystick state.\n");
 	joy_init(0);
 	joy_init(1);
 
@@ -989,6 +1133,9 @@ main(void)
 
 	printf("Starting UART reader on Core 1.\n");
 	multicore_launch_core1(nabu_keyboard_reader);
+
+	printf("Enabling keyboard power.\n");
+	kbd_setpower(true);
 
 	printf("Entering main loop!\n");
 	for (;;) {
