@@ -72,6 +72,15 @@
 
 #define	SIMULATE_KEYSTROKES	/* simulate keystrokes for debugging */
 
+/* TODO: Initialize this with a strapping pin. */
+static bool debug_enabled = true;
+#define	debug_printf(...)					\
+	do {							\
+		if (debug_enabled) {				\
+			printf(__VA_ARGS__);			\
+		}						\
+	} while (/*CONSTCOND*/0)
+
 /*
  * GPIO pins 4 and 5 are used for UART1 TX and RX, respectively.
  * This maps to physical pins 6 and 7 on the DIP-40 Pico.
@@ -677,26 +686,28 @@ hid_task(void)
 	 */
 	bool have_work = false;
 	if (kbd_context.next != NULL) {
-		printf("DEBUG: %s: next != NULL, have_work -> true\n",
+		debug_printf("DEBUG: %s: next != NULL, have_work -> true\n",
 		    __func__);
 		have_work = true;
 	}
 	if (! QUEUE_EMPTY_P(&kbd_context.queue)) {
-		printf("DEBUG: %s: kbd queue, have_work -> true\n", __func__);
+		debug_printf("DEBUG: %s: kbd queue, have_work -> true\n",
+		    __func__);
 		have_work = true;
 	}
 	if (! QUEUE_EMPTY_P(&joy_context[0].queue)) {
-		printf("DEBUG: %s: joy0 queue, have_work -> true\n", __func__);
+		debug_printf("DEBUG: %s: joy0 queue, have_work -> true\n",
+		    __func__);
 		have_work = true;
 	}
 	if (! QUEUE_EMPTY_P(&joy_context[1].queue)) {
-		printf("DEBUG: %s: joy1 queue, have_work -> true\n", __func__);
+		debug_printf("DEBUG: %s: joy1 queue, have_work -> true\n",
+		    __func__);
 		have_work = true;
 	}
 
 	if (! have_work) {
 		/* No data to send. */
-		/* XXX Do we need to send reports always? */
 		return;
 	}
 
@@ -722,21 +733,35 @@ hid_task(void)
 				/* Last code in the sequence - key up. */
 				kbd_context.next = NULL;
 			}
-			printf("DEBUG: %s: next code in sequence: 0x%04x\n",
+			debug_printf("DEBUG: %s: next in sequence: 0x%04x\n",
 			    __func__, code);
 			send_kbd_report(code);
 		} else if (queue_get(&kbd_context.queue, &c)) {
 			const uint16_t *sequence = nabu_to_hid[c].codes;
+
+			/* XXX errors / heartbeat */
+
 			code = sequence[0];
 			if (code != 0) {
-				printf("DEBUG: %s: got 0x%02x\n", __func__, c);
+				debug_printf("DEBUG: %s: got 0x%02x\n",
+				    __func__, c);
 				/* UP/DOWN keys don't use a sequence. */
-				if ((code & (M_UP | M_DOWN)) == 0) {
-					kbd_context.next = &sequence[1];
+				if (code & M_DOWN) {
+					debug_printf("DEBUG: %s: code 0x%04x\n",
+					    __func__, code);
+				} else if (code & M_UP) {
+					debug_printf("DEBUG: %s: key-up\n",
+					    __func__);
+					code = HID_KEY_NONE;
+				} else {
+					debug_printf(
+					    "DEBUG: %s: first code 0x%04x\n",
+					    __func__, code);
+					    kbd_context.next = &sequence[1];
 				}
 				send_kbd_report(code);
 			} else {
-				printf("DEBUG: %s: ignoring 0x%02x\n",
+				debug_printf("DEBUG: %s: ignoring 0x%02x\n",
 				    __func__, c);
 			}
 		}
@@ -864,7 +889,8 @@ kbd_getc(void)
 		idx = state - 5;
 		c = str[idx];
 		if (c != '\0') {
-			printf("DEBUG: %s: Injecting '%c'\n", __func__, c);
+			debug_printf("DEBUG: %s: Injecting '%c'\n",
+			    __func__, c);
 			state++;
 			return c;
 		}
