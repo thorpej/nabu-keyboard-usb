@@ -1088,10 +1088,11 @@ kbd_getc(void)
 	static int seqidx = 0;
 
 	/*
-	 * 4 second delay, then a simulated reset, another 1 second delay,
-	 * then simulated keystroke once per second until the end of the
-	 * simulated sequence.  After that, we just send the ping every
-	 * 4 seconds and check for Cmd-c / Cmd-v.
+	 * 6 second delay (to trigger "waiting for..." message), then a
+	 * simulated reset, another 1 second delay, then simulated
+	 * keystroke once per second until the end of the simulated
+	 * sequence.  After that, we just send the ping every 4 seconds
+	 * and check for Cmd-c / Cmd-v.
 	 */
 
 	for (;;) {
@@ -1110,7 +1111,7 @@ kbd_getc(void)
 
 		start_ms += 1000;
 
-		if (start_ms == 4000) {
+		if (start_ms == 6000) {
 			debug_printf("DEBUG: %s: Injecting ERR_RESET\n",
 			    __func__);
 			c = NABU_CODE_ERR_RESET;
