@@ -199,12 +199,12 @@ queue_drain(struct queue *q)
 static uint32_t blink_interval_ms = BLINK_NOT_MOUNTED;
 
 static void
-led_task(void)
+led_task(uint32_t now)
 {
 	static uint32_t start_ms = 0;
 	static bool led_state = false;
 
-	if (board_millis() - start_ms < blink_interval_ms) {
+	if (now - start_ms < blink_interval_ms) {
 		return;
 	}
 
@@ -864,15 +864,14 @@ kbd_err_task(uint8_t c)
 #define	REPORT_INTERVAL_MS	10
 
 static void
-hid_task(void)
+hid_task(uint32_t now)
 {
-	uint32_t now;
 	uint8_t c;
 
 	/* This is good for ~139 years of uptime. */
 	static uint32_t start_ms;
 
-	if ((now = board_millis()) - start_ms < REPORT_INTERVAL_MS) {
+	if (now - start_ms < REPORT_INTERVAL_MS) {
 		return;
 	}
 
@@ -1207,6 +1206,7 @@ nabu_keyboard_reader(void)
 int
 main(void)
 {
+	uint32_t now;
 	uint actual_baud;
 
 	/* TinyUSB SDK board init - initializes LED and console UART (0). */
@@ -1287,8 +1287,9 @@ main(void)
 
 	printf("Entering main loop!\n");
 	for (;;) {
+		now = board_millis();
+		led_task(now);		/* heartbeat LED */
+		hid_task(now);		/* HID processing */
 		tud_task();		/* TinyUSB device task */
-		led_task();		/* heartbeat LED */
-		hid_task();		/* HID processing */
 	}
 }
