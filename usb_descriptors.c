@@ -61,23 +61,16 @@ tud_descriptor_device_cb(void)
 //--------------------------------------------------------------------+
 
 static uint8_t const
-desc_hid_report1[] =
+desc_hid_kbd[] =
 {
 	TUD_HID_REPORT_DESC_KEYBOARD()
 };
 
 static uint8_t const
-desc_hid_report2[] =
+desc_hid_joy[] =
 {
 	TUD_HID_REPORT_DESC_GAMEPAD()
 };
-
-static uint8_t const
-desc_hid_report3[] =
-{
-	TUD_HID_REPORT_DESC_GAMEPAD()
-};
-
 
 // Invoked when received GET HID REPORT DESCRIPTOR
 // Application return pointer to descriptor
@@ -87,13 +80,11 @@ tud_hid_descriptor_report_cb(uint8_t itf)
 {
 	switch (itf) {
 	case ITF_NUM_KBD:
-		return desc_hid_report1;
+		return desc_hid_kbd;
 
 	case ITF_NUM_JOY0:
-		return desc_hid_report2;
-
 	case ITF_NUM_JOY1:
-		return desc_hid_report3;
+		return desc_hid_joy;
 	}
 
 	return NULL;
@@ -104,9 +95,7 @@ tud_hid_descriptor_report_cb(uint8_t itf)
 //--------------------------------------------------------------------+
 
 #define	CONFIG_TOTAL_LEN	(TUD_CONFIG_DESC_LEN +		\
-				 TUD_HID_DESC_LEN +		\
-				 TUD_HID_DESC_LEN +		\
-				 TUD_HID_DESC_LEN)
+				 (TUD_HID_DESC_LEN * 3))
 
 #define	EPNUM_KBD		0x81
 #define	EPNUM_JOY0		0x82
@@ -123,15 +112,15 @@ static uint8_t const desc_configuration[] =
 	//     report descriptor len, EP In address,
 	//     size, polling interval
 	TUD_HID_DESCRIPTOR(ITF_NUM_KBD, 4, HID_ITF_PROTOCOL_NONE,
-	    sizeof(desc_hid_report1), EPNUM_KBD,
+	    sizeof(desc_hid_kbd), EPNUM_KBD,
 	    CFG_TUD_HID_EP_BUFSIZE, 10),
 
 	TUD_HID_DESCRIPTOR(ITF_NUM_JOY0, 5, HID_ITF_PROTOCOL_NONE,
-	    sizeof(desc_hid_report2), EPNUM_JOY0,
+	    sizeof(desc_hid_joy), EPNUM_JOY0,
 	    CFG_TUD_HID_EP_BUFSIZE, 10),
 
 	TUD_HID_DESCRIPTOR(ITF_NUM_JOY1, 6, HID_ITF_PROTOCOL_NONE,
-	    sizeof(desc_hid_report3), EPNUM_JOY1,
+	    sizeof(desc_hid_joy), EPNUM_JOY1,
 	    CFG_TUD_HID_EP_BUFSIZE, 10),
 };
 
