@@ -70,8 +70,14 @@
 
 #define	SIMULATE_KEYSTROKES	/* simulate keystrokes for debugging */
 
-/* TODO: Initialize this with a strapping pin. */
-static bool debug_enabled = true;
+/*
+ * GP22 (physical pin 29 on the DIP-40 Pico) is a debug-enable strapping
+ * pin that we sample when we launch.  It's pulled-up internally; strap
+ * to ground to enable debug messages.
+ */
+#define	DEBUG_STRAP_PIN		22
+
+static bool debug_enabled;
 #define	debug_printf(...)					\
 	do {							\
 		if (debug_enabled) {				\
@@ -85,13 +91,6 @@ static bool debug_enabled = true;
  */
 #define	UART1_TX_PIN		4
 #define	UART1_RX_PIN		5
-
-/*
- * GP22 (physical pin 29 on the DIP-40 Pico) is a debug-enable strapping
- * pin that we sample when we launch.  It's pulled-up internally; strap
- * to ground to enable debug messages.
- */
-#define	DEBUG_STRAP_PIN		22
 
 /*
  * GP26 (physical pin 31 on the DIP-40 Pico) is connected to the gate
