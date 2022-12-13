@@ -781,14 +781,14 @@ kbd_reboot(void)
 #define	DEADCHECK_WARN_MS	5000
 #define	DEADCHECK_DECLARE_MS	8000
 
-static bool
+static void
 kbd_deadcheck(uint32_t now)
 {
 	static bool deadcheck_warned;
 
 	if (now - last_kbd_message_time < DEADCHECK_WARN_MS) {
 		deadcheck_warned = false;
-		return false;
+		return;
 	}
 
 	/* A deadcheck when we haven't yet seen the keyboard is pointless. */
@@ -796,7 +796,7 @@ kbd_deadcheck(uint32_t now)
 		/* Suppress for another deadcheck interval. */
 		last_kbd_message_time = now;
 		printf("INFO: waiting for keyboard.\n");
-		return false;
+		return;
 	}
 
 	if (now - last_kbd_message_time < DEADCHECK_DECLARE_MS) {
@@ -804,14 +804,13 @@ kbd_deadcheck(uint32_t now)
 			printf("WARNING: keyboard failed to ping.\n");
 			deadcheck_warned = true;
 		}
-		return false;
+		return;
 	}
 
 	/* Declare the keyboard dead and reboot it. */
 	printf("ERROR: keyboard appears dead, rebooting...\n");
 	kbd_reboot();
 	deadcheck_warned = false;
-	return true;
 }
 
 static bool
@@ -881,18 +880,12 @@ hid_task(uint32_t now)
 	 * Quick unlocked queue-empty checks to see if there's
 	 * work to do.
 	 */
-	bool have_work = false;
-	if (kbd_deadcheck(now)) {
-		debug_printf("DEBUG: %s: deadcheck, have_work -> true\n",
-		    __func__);
-		have_work = true;
-	}
 	if (kbd_has_data_unlocked() ||
 	    joy_has_data_unlocked(0) || joy_has_data_unlocked(1)) {
-		have_work = true;
-	}
-
-	if (! have_work) {
+		debug_printf("DEBUG: %s: have work to do (k=%d j0=%d j1=%d)\n",
+		    __func__, kbd_has_data_unlocked(),
+		    joy_has_data_unlocked(0), joy_has_data_unlocked(1));
+	} else {
 		/* No data to send. */
 		return;
 	}
@@ -1289,6 +1282,7 @@ main(void)
 	for (;;) {
 		now = board_millis();
 		led_task(now);		/* heartbeat LED */
+		kbd_deadcheck(now);	/* check if keyboard is alive */
 		hid_task(now);		/* HID processing */
 		tud_task();		/* TinyUSB device task */
 	}
