@@ -100,6 +100,15 @@ static bool debug_enabled = true;
  */
 #define	PWREN_PIN		26
 
+#ifdef SIMULATE_KEYSTROKES
+/*
+ * GP14 and GP15 (physical pins 19 and 20) are sampled to simulate
+ * sending a Cmd-c and Cmd-v, respectively.
+ */
+#define	CMD_C_PIN		14
+#define	CMD_V_PIN		15
+#endif /* SIMULATE_KEYSTROKES */
+
 /*
  * Circular queue between the the UART receiver and the USB sender.
  */
@@ -674,9 +683,13 @@ kbd_modifier(uint16_t code)
 {
 	if (code & M_DOWN) {
 		/* Set the sticky modifier. */
+		debug_printf("DEBUG: %s: setting sticky modifier 0x%04x\n",
+		    __func__, M_MODS(code));
 		kbd_context.modifiers |= M_MODS(code);
 	} else if (code & M_UP) {
 		/* Clear the sticky modifier. */
+		debug_printf("DEBUG: %s: clearing sticky modifier 0x%04x\n",
+		    __func__, M_MODS(code));
 		kbd_context.modifiers &= ~M_MODS(code);
 	} else {
 		/* Nonsensical. */
@@ -1054,15 +1067,29 @@ kbd_getc(void)
 	static int start_ms = 0;
 	static int idx = 0;
 	static const char str[] = "Oink!\n";
+					  /* SYMd       SYMu       */
+	static const uint8_t cmd_c_seq[] = { 0xe8, 'c', 0xf8, 0xff };
+	static const uint8_t cmd_v_seq[] = { 0xe8, 'v', 0xf8, 0xff };
+	static const uint8_t *seq = NULL;
+	static int seqidx = 0;
 
 	/*
 	 * 4 second delay, then a simulated reset, another 1 second delay,
 	 * then simulated keystroke once per second until the end of the
 	 * simulated sequence.  After that, we just send the ping every
-	 * 4 seconds.
+	 * 4 seconds and check for Cmd-c / Cmd-v.
 	 */
 
 	for (;;) {
+		if (seq != NULL) {
+			c = seq[seqidx++];
+			if (c != 0xff) {
+				goto out;
+			}
+			seq = NULL;
+			seqidx = 0;
+		}
+
 		if ((now = board_millis()) - start_ms < 1000) {
 			continue;
 		}
@@ -1084,6 +1111,16 @@ kbd_getc(void)
 			  __func__);
 			c = NABU_CODE_ERR_PING;
 			goto out;
+		} else if (! gpio_get(CMD_C_PIN)) {
+			debug_printf("DEBUG: %s: Injecting Cmd-c sequence\n",
+			    __func__);
+			seq = cmd_c_seq;
+			/* handled on the go-around */
+		} else if (! gpio_get(CMD_V_PIN)) {
+			debug_printf("DEBUG: %s: Injecting Cmd-v sequence\n",
+			    __func__);
+			seq = cmd_v_seq;
+			/* handled on the go-around */
 		}
 	}
  out:
@@ -1186,6 +1223,14 @@ main(void)
 	}
 	uart_set_fifo_enabled(uart1, true);
 	uart_set_format(uart1, 8/*data*/, 1/*stop*/, UART_PARITY_NONE);
+
+#ifdef SIMULATE_KEYSTROKES
+	printf("Initializing simulated Cmd-c and Cmd-v.\n");
+	gpio_init(CMD_C_PIN);
+	gpio_pull_up(CMD_C_PIN);
+	gpio_init(CMD_V_PIN);
+	gpio_pull_up(CMD_V_PIN);
+#endif /* SIMULATE_KEYSTROKES */
 
 	printf("Initializing USB stack.\n");
 	tusb_init();
