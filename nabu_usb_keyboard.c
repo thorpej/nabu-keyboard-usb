@@ -48,7 +48,6 @@
  *
  * TODO:
  * - Handle the host requesting Boot protocol (rather than Report protocol).
- * - Map SYM to META/GUI/CMD (and track its state).
  * - Figure out something to map to ALT/OPT.
  */
 
@@ -229,10 +228,14 @@ static bool want_remote_wakeup = false;
 
 #define	M_CTRL		0x0100		/* KEYBOARD_MODIFIER_LEFTCTRL << 8 */
 #define	M_SHIFT		0x0200		/* KEYBOARD_MODIFIER_LEFTSHIFT << 8 */
+#define	M_META		0x0800		/* KEYBOARD_MODIFIER_LEFTGUI << 8 */
 #define	M_DOWN		0x1000
 #define	M_UP		0x2000
 #define	M_JOY		0x4000
 #define	M_JOYDAT	0x8000
+
+#define	M_HIDKEY(m)	((m) & 0x00ff)
+#define	M_MODS(m)	((m) & 0x0f00)
 
 #define	NABU_CODE_JOY0		0x80
 #define	NABU_CODE_JOY1		0x81
@@ -564,7 +567,7 @@ static const struct codeseq nabu_to_hid[256] = {
 [0xe5]		=	{ { M_DOWN | HID_KEY_PAGE_UP } },	/* <||| */
 [0xe6]		=	{ { 0 /* XXX */ } },			/* NO */
 [0xe7]		=	{ { 0 /* XXX */ } },			/* YES */
-[0xe8]		=	{ { 0 /* XXX */ } },			/* SYM */
+[0xe8]		=	{ { M_DOWN | M_META } },		/* SYM */
 [0xe9]		=	{ { M_DOWN | HID_KEY_PAUSE } },		/* PAUSE */
 [0xea]		=	{ { 0 /* XXX */ } },			/* TV/NABU */
 /* 0xeb - 0xef */
@@ -576,7 +579,7 @@ static const struct codeseq nabu_to_hid[256] = {
 [0xf5]		=	{ { M_UP | HID_KEY_PAGE_UP } },		/* <||| */
 [0xf6]		=	{ { 0 /* XXX */ } },			/* NO */
 [0xf7]		=	{ { 0 /* XXX */ } },			/* YES */
-[0xf8]		=	{ { 0 /* XXX */ } },			/* SYM */
+[0xf8]		=	{ { M_UP | M_META } },			/* SYM */
 [0xf9]		=	{ { M_UP | HID_KEY_PAUSE } },		/* PAUSE */
 [0xfa]		=	{ { 0 /* XXX */ } },			/* TV/NABU */
 /* 0xfb - 0xff */
@@ -647,6 +650,7 @@ send_joy_report(int which, uint8_t data)
 static struct {
 	struct queue queue;
 	const uint16_t *next;
+	uint16_t modifiers;
 	bool zombie;
 } kbd_context;
 
@@ -655,14 +659,35 @@ kbd_init(void)
 {
 	queue_init(&kbd_context.queue);
 	kbd_context.next = NULL;
+	kbd_context.modifiers = 0;
 	kbd_context.zombie = false;
 }
 
 static inline uint8_t
 keymod_to_hid(uint16_t code)
 {
-	return (code >> 8) &
-	    (KEYBOARD_MODIFIER_LEFTCTRL | KEYBOARD_MODIFIER_LEFTSHIFT);
+	return M_MODS(code) >> 8;
+}
+
+static uint16_t
+kbd_modifier(uint16_t code)
+{
+	if (code & M_DOWN) {
+		/* Set the sticky modifier. */
+		kbd_context.modifiers |= M_MODS(code);
+	} else if (code & M_UP) {
+		/* Clear the sticky modifier. */
+		kbd_context.modifiers &= ~M_MODS(code);
+	} else {
+		/* Nonsensical. */
+		return code;
+	}
+
+	/*
+	 * Return an empty keycode to give the updated modifiers
+	 * to the host.
+	 */
+	return HID_KEY_NONE;
 }
 
 static void
@@ -672,7 +697,7 @@ send_kbd_report(uint16_t code)
 	uint8_t keycode = (uint8_t)code;
 
 	hid_keyboard_report_t report = {
-		.modifier	=	keymod,
+		.modifier	=	keymod | kbd_context.modifiers,
 		.keycode	=	{ [0] = keycode },
 	};
 
@@ -881,8 +906,9 @@ hid_task(void)
 			 */
 			debug_printf("DEBUG: %s: clearing zombie state.\n",
 			    __func__);
-			send_kbd_report(HID_KEY_NONE);
 			kbd_context.zombie = false;
+			kbd_context.modifiers = 0;
+			send_kbd_report(HID_KEY_NONE);
 		} else if (queue_get(&kbd_context.queue, &c)) {
 			const uint16_t *sequence = nabu_to_hid[c].codes;
 			code = sequence[0];
@@ -899,10 +925,19 @@ hid_task(void)
 				if (code & M_DOWN) {
 					debug_printf("DEBUG: %s: code 0x%04x\n",
 					    __func__, code);
+					if (M_HIDKEY(code) == HID_KEY_NONE) {
+						/* Sticky modifier. */
+						code = kbd_modifier(code);
+					}
 				} else if (code & M_UP) {
 					debug_printf("DEBUG: %s: key-up\n",
 					    __func__);
-					code = HID_KEY_NONE;
+					if (M_HIDKEY(code) == HID_KEY_NONE) {
+						/* Sticky modifier. */
+						code = kbd_modifier(code);
+					} else {
+						code = HID_KEY_NONE;
+					}
 				} else {
 					debug_printf(
 					    "DEBUG: %s: first code 0x%04x\n",
