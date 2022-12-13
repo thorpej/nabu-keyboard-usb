@@ -642,6 +642,13 @@ joy_init(int which)
 	joy_context[which].zombie = false;
 }
 
+static inline bool
+joy_has_data_unlocked(int which)
+{
+	return !QUEUE_EMPTY_P(&joy_context[which].queue) ||
+	       joy_context[which].zombie;
+}
+
 static void
 send_joy_report(int which, uint8_t data)
 {
@@ -670,6 +677,14 @@ kbd_init(void)
 	kbd_context.next = NULL;
 	kbd_context.modifiers = 0;
 	kbd_context.zombie = false;
+}
+
+static inline bool
+kbd_has_data_unlocked(void)
+{
+	return kbd_context.next != NULL ||
+	       !QUEUE_EMPTY_P(&kbd_context.queue) ||
+	       kbd_context.zombie;
 }
 
 static inline uint8_t
@@ -873,24 +888,8 @@ hid_task(void)
 		    __func__);
 		have_work = true;
 	}
-	if (kbd_context.next != NULL) {
-		debug_printf("DEBUG: %s: next != NULL, have_work -> true\n",
-		    __func__);
-		have_work = true;
-	}
-	if (! QUEUE_EMPTY_P(&kbd_context.queue)) {
-		debug_printf("DEBUG: %s: kbd queue, have_work -> true\n",
-		    __func__);
-		have_work = true;
-	}
-	if (! QUEUE_EMPTY_P(&joy_context[0].queue)) {
-		debug_printf("DEBUG: %s: joy0 queue, have_work -> true\n",
-		    __func__);
-		have_work = true;
-	}
-	if (! QUEUE_EMPTY_P(&joy_context[1].queue)) {
-		debug_printf("DEBUG: %s: joy1 queue, have_work -> true\n",
-		    __func__);
+	if (kbd_has_data_unlocked() ||
+	    joy_has_data_unlocked(0) || joy_has_data_unlocked(1)) {
 		have_work = true;
 	}
 
