@@ -1147,6 +1147,8 @@ kbd_getc(void)
 	return c;
 }
 
+#define	CORE1_MAGIC	(('N' << 24) | ('A' << 16) | ('B' << 8) | 'U')
+
 /*
  * This function runs on Core 1, sucks down bytes from the UART
  * in a tight loop, and pushes them into the appropriate queue.
@@ -1156,6 +1158,10 @@ nabu_keyboard_reader(void)
 {
 	int joy_instance = -1;
 	uint8_t c;
+
+	/* Let the main thread know we're alive and ready. */
+	multicore_fifo_push_blocking(CORE1_MAGIC);
+	multicore_fifo_drain();
 
 	for (;;) {
 		c = kbd_getc();
@@ -1238,6 +1244,11 @@ main(void)
 	uart_set_fifo_enabled(uart1, true);
 	uart_set_format(uart1, 8/*data*/, 1/*stop*/, UART_PARITY_NONE);
 
+	/* Drain the keyboard UART of any junk that might be stuck. */
+	while (uart_is_readable(uart1)) {
+		uart_getc(uart1);
+	}
+
 #ifdef SIMULATE_KEYSTROKES
 	printf("Initializing simulated Cmd-c and Cmd-v.\n");
 	gpio_init(CMD_C_PIN);
@@ -1256,11 +1267,21 @@ main(void)
 	joy_init(0);
 	joy_init(1);
 
+ relaunch:
 	printf("Resetting Core 1.\n");
+	multicore_fifo_drain();
 	multicore_reset_core1();
 
 	printf("Starting UART reader on Core 1.\n");
 	multicore_launch_core1(nabu_keyboard_reader);
+
+	printf("Waiting for UART reader to be ready.\n");
+	uint32_t magic = multicore_fifo_pop_blocking();
+	if (magic != CORE1_MAGIC) {
+		printf("ERROR: bad magic from Core 1 (0x%08x != 0x%08x)!\n",
+		    magic, CORE1_MAGIC);
+		goto relaunch;
+	}
 
 	printf("Enabling keyboard power.\n");
 	kbd_setpower(true);
