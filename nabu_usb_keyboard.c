@@ -216,6 +216,7 @@ led_task(void)
 }
 
 static bool want_remote_wakeup = false;
+static bool have_nabu = false;
 
 /*
  * Map NABU keycodes to HID key codes.
@@ -727,6 +728,9 @@ static void
 kbd_setpower(bool enabled)
 {
 	gpio_put(PWREN_PIN, enabled);
+	if (! enabled) {
+		have_nabu = false;
+	}
 }
 
 static void
@@ -770,6 +774,14 @@ kbd_deadcheck(uint32_t now)
 
 	if (now - last_kbd_message_time < DEADCHECK_WARN_MS) {
 		deadcheck_warned = false;
+		return false;
+	}
+
+	/* A deadcheck when we haven't yet seen the keyboard is pointless. */
+	if (! have_nabu) {
+		/* Suppress for another deadcheck interval. */
+		last_kbd_message_time = now;
+		printf("INFO: waiting for keyboard.\n");
 		return false;
 	}
 
@@ -819,6 +831,8 @@ kbd_err_task(uint8_t c)
 		return false;
 
 	case NABU_CODE_ERR_RESET:
+		/* Keyboard has announced itself! */
+		have_nabu = true;
 		printf("INFO: received RESET notification from keyboard.\n",
 		    __func__);
 		return false;
