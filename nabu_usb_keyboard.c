@@ -27,7 +27,7 @@
 /*
  * NABU USB Keyboard
  *
- * This interfaces a NABU PC keyboard to USB has a USB keyboard device
+ * This interfaces a NABU PC keyboard as a USB keyboard device
  * with the standard US layout.
  *
  * For the most part, the NABU keyboard reports keys as ASCII characters.
