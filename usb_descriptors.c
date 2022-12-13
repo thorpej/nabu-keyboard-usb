@@ -131,7 +131,7 @@ static uint8_t const desc_configuration[] =
 	    CFG_TUD_HID_EP_BUFSIZE, 10),
 
 	TUD_HID_DESCRIPTOR(ITF_NUM_JOY1, 6, HID_ITF_PROTOCOL_NONE,
-	    sizeof(desc_hid_report2), EPNUM_JOY0,
+	    sizeof(desc_hid_report3), EPNUM_JOY1,
 	    CFG_TUD_HID_EP_BUFSIZE, 10),
 };
 
@@ -155,7 +155,7 @@ static char const* string_desc_arr[] =
   (const char[]) { 0x09, 0x04 },  // 0: is supported language is English (0x0409)
   "@thorpej",                     // 1: Manufacturer
   "NABU Keyboard Adapter",        // 2: Product
-  "123456",                       // 3: Serials, should use chip ID
+  "666",                          // 3: Serials, should use chip ID
   "Keyboard",                     // 4: Interface 1 String
   "Joystick 0",                   // 5: Interface 2 String
   "Joystick 1",                   // 6: Interface 3 String
