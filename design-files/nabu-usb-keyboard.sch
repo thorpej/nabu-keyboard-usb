@@ -4,7 +4,7 @@ EELAYER END
 $Descr A4 11693 8268
 encoding utf-8
 Sheet 1 1
-Title "NABU USB Keyboard Adapter"
+Title "NABU Keyboard to USB Adapter"
 Date "2022-12-13"
 Rev "0.1"
 Comp "(c) 2022 Jason R. Thorpe. See LICENSE."
