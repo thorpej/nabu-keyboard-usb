@@ -572,8 +572,8 @@ static const struct codeseq nabu_to_hid[256] = {
 
 [0xe0]		=	{ { M_DOWN | HID_KEY_ARROW_RIGHT } },
 [0xe1]		=	{ { M_DOWN | HID_KEY_ARROW_LEFT } },
-[0xe2]		=	{ { M_DOWN | HID_KEY_ARROW_DOWN } },
-[0xe3]		=	{ { M_DOWN | HID_KEY_ARROW_UP } },
+[0xe2]		=	{ { M_DOWN | HID_KEY_ARROW_UP } },
+[0xe3]		=	{ { M_DOWN | HID_KEY_ARROW_DOWN } },
 [0xe4]		=	{ { M_DOWN | HID_KEY_PAGE_DOWN } },	/* |||> */
 [0xe5]		=	{ { M_DOWN | HID_KEY_PAGE_UP } },	/* <||| */
 [0xe6]		=	{ { 0 /* XXX */ } },			/* NO */
@@ -584,8 +584,8 @@ static const struct codeseq nabu_to_hid[256] = {
 /* 0xeb - 0xef */
 [0xf0]		=	{ { M_UP | HID_KEY_ARROW_RIGHT } },
 [0xf1]		=	{ { M_UP | HID_KEY_ARROW_LEFT } },
-[0xf2]		=	{ { M_UP | HID_KEY_ARROW_DOWN } },
-[0xf3]		=	{ { M_UP | HID_KEY_ARROW_UP } },
+[0xf2]		=	{ { M_UP | HID_KEY_ARROW_UP } },
+[0xf3]		=	{ { M_UP | HID_KEY_ARROW_DOWN } },
 [0xf4]		=	{ { M_UP | HID_KEY_PAGE_DOWN } },	/* |||> */
 [0xf5]		=	{ { M_UP | HID_KEY_PAGE_UP } },		/* <||| */
 [0xf6]		=	{ { 0 /* XXX */ } },			/* NO */
