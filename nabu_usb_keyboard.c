@@ -68,7 +68,9 @@
 
 /* Local headers */
 
+#if 0
 #define	SIMULATE_KEYSTROKES	/* simulate keystrokes for debugging */
+#endif
 
 /*
  * GP22 (physical pin 29 on the DIP-40 Pico) is a debug-enable strapping
