@@ -103,11 +103,11 @@ static bool debug_enabled;
 
 #ifdef SIMULATE_KEYSTROKES
 /*
- * GP14 and GP15 (physical pins 19 and 20) are sampled to simulate
+ * GP14 and GP15 (physical pins 22 and 21) are sampled to simulate
  * sending a Cmd-c and Cmd-v, respectively.
  */
-#define	CMD_C_PIN		14
-#define	CMD_V_PIN		15
+#define	CMD_C_PIN		17
+#define	CMD_V_PIN		16
 #endif /* SIMULATE_KEYSTROKES */
 
 /*
