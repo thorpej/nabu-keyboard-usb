@@ -1173,6 +1173,8 @@ nabu_keyboard_reader(void)
 				/* Unexpected; discard data. */
 				continue;
 			}
+			debug_printf("DEBUG: %s: adding JOY%d code 0x%02x\n",
+			    __func__, joy_instance, c);
 			queue_add(&joy_context[joy_instance].queue, c);
 			joy_instance = -1;
 			continue;
@@ -1189,7 +1191,7 @@ nabu_keyboard_reader(void)
 		 * will be taken.
 		 */
 		if (nabu_to_hid[c].codes[0] != 0 || NABU_CODE_ERR_P(c)) {
-			debug_printf("DEBUG: %s: adding code 0x%02x\n",
+			debug_printf("DEBUG: %s: adding KBD code 0x%02x\n",
 			    __func__, c);
 			queue_add(&kbd_context.queue, c);
 		}
