@@ -239,6 +239,7 @@ static bool have_nabu = false;
 
 #define	M_CTRL		0x0100		/* KEYBOARD_MODIFIER_LEFTCTRL << 8 */
 #define	M_SHIFT		0x0200		/* KEYBOARD_MODIFIER_LEFTSHIFT << 8 */
+#define	M_ALT		0x0400		/* KEYBOARD_MODIFIER_LEFTALT << 8 */
 #define	M_META		0x0800		/* KEYBOARD_MODIFIER_LEFTGUI << 8 */
 #define	M_DOWN		0x1000
 #define	M_UP		0x2000
@@ -580,7 +581,7 @@ static const struct codeseq nabu_to_hid[256] = {
 [0xe7]		=	{ { 0 /* XXX */ } },			/* YES */
 [0xe8]		=	{ { M_DOWN | M_META } },		/* SYM */
 [0xe9]		=	{ { M_DOWN | HID_KEY_PAUSE } },		/* PAUSE */
-[0xea]		=	{ { 0 /* XXX */ } },			/* TV/NABU */
+[0xea]		=	{ { M_DOWN | M_ALT } },			/* TV/NABU */
 /* 0xeb - 0xef */
 [0xf0]		=	{ { M_UP | HID_KEY_ARROW_RIGHT } },
 [0xf1]		=	{ { M_UP | HID_KEY_ARROW_LEFT } },
@@ -592,7 +593,7 @@ static const struct codeseq nabu_to_hid[256] = {
 [0xf7]		=	{ { 0 /* XXX */ } },			/* YES */
 [0xf8]		=	{ { M_UP | M_META } },			/* SYM */
 [0xf9]		=	{ { M_UP | HID_KEY_PAUSE } },		/* PAUSE */
-[0xfa]		=	{ { 0 /* XXX */ } },			/* TV/NABU */
+[0xfa]		=	{ { M_UP | M_ALT } },			/* TV/NABU */
 /* 0xfb - 0xff */
 };
 
