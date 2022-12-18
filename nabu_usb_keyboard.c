@@ -724,11 +724,11 @@ kbd_modifier(uint16_t code)
 static void
 send_kbd_report(uint16_t code)
 {
-	uint8_t keymod = keymod_to_hid(code);
+	uint8_t keymod = keymod_to_hid(code | kbd_context.modifiers);
 	uint8_t keycode = (uint8_t)code;
 
 	hid_keyboard_report_t report = {
-		.modifier	=	keymod | kbd_context.modifiers,
+		.modifier	=	keymod,
 		.keycode	=	{ [0] = keycode },
 	};
 
