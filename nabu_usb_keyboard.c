@@ -243,8 +243,7 @@ static bool have_nabu = false;
 #define	M_META		0x0800		/* KEYBOARD_MODIFIER_LEFTGUI << 8 */
 #define	M_DOWN		0x1000
 #define	M_UP		0x2000
-#define	M_JOY		0x4000
-#define	M_JOYDAT	0x8000
+#define	M_ENDSEQ	0x4000
 
 #define	M_HIDKEY(m)	((m) & 0x00ff)
 #define	M_MODS(m)	((m) & 0x0f00)
@@ -577,8 +576,17 @@ static const struct codeseq nabu_to_hid[256] = {
 [0xe3]		=	{ { M_DOWN | HID_KEY_ARROW_DOWN } },
 [0xe4]		=	{ { M_DOWN | HID_KEY_PAGE_DOWN } },	/* |||> */
 [0xe5]		=	{ { M_DOWN | HID_KEY_PAGE_UP } },	/* <||| */
-[0xe6]		=	{ { 0 /* XXX */ } },			/* NO */
-[0xe7]		=	{ { 0 /* XXX */ } },			/* YES */
+	/*
+	 * There isn't really a good alternative for \ and |, so we steal
+	 * the NO and YES keys, respectively.  Because these keys don't
+	 * self-repeat, we end their key-down sequences without unwinding
+	 * to HID_KEY_NONE, and let the USB host do the key repeat itself.
+	 * We do this by ending the sequence with whatever HID key code
+	 * is present with M_ENDSEQ.
+	 */
+[0xe6]		=	{ { M_ENDSEQ | HID_KEY_BACKSLASH } },	/* NO */
+[0xe7]		=	{ { M_SHIFT,				/* YES */
+			    M_SHIFT | M_ENDSEQ | HID_KEY_BACKSLASH } },
 [0xe8]		=	{ { M_DOWN | M_META } },		/* SYM */
 [0xe9]		=	{ { M_DOWN | HID_KEY_PAUSE } },		/* PAUSE */
 [0xea]		=	{ { M_DOWN | M_ALT } },			/* TV/NABU */
@@ -589,8 +597,8 @@ static const struct codeseq nabu_to_hid[256] = {
 [0xf3]		=	{ { M_UP | HID_KEY_ARROW_DOWN } },
 [0xf4]		=	{ { M_UP | HID_KEY_PAGE_DOWN } },	/* |||> */
 [0xf5]		=	{ { M_UP | HID_KEY_PAGE_UP } },		/* <||| */
-[0xf6]		=	{ { 0 /* XXX */ } },			/* NO */
-[0xf7]		=	{ { 0 /* XXX */ } },			/* YES */
+[0xf6]		=	{ { M_ENDSEQ } },			/* NO */
+[0xf7]		=	{ { M_SHIFT } },			/* YES */
 [0xf8]		=	{ { M_UP | M_META } },			/* SYM */
 [0xf9]		=	{ { M_UP | HID_KEY_PAUSE } },		/* PAUSE */
 [0xfa]		=	{ { M_UP | M_ALT } },			/* TV/NABU */
@@ -911,8 +919,8 @@ hid_task(uint32_t now)
 
 		if (kbd_context.next != NULL) {
 			code = *kbd_context.next++;
-			if (code == 0) {
-				/* Last code in the sequence - key up. */
+			if (code == 0 || (code & M_ENDSEQ) != 0) {
+				/* Last code in the sequence. */
 				kbd_context.next = NULL;
 			}
 			debug_printf("DEBUG: %s: next in sequence: 0x%04x\n",
@@ -962,7 +970,9 @@ hid_task(uint32_t now)
 					debug_printf(
 					    "DEBUG: %s: first code 0x%04x\n",
 					    __func__, code);
-					    kbd_context.next = &sequence[1];
+					if ((code & M_ENDSEQ) == 0) {
+						kbd_context.next = &sequence[1];
+					}
 				}
 				send_kbd_report(code);
 			} else {
@@ -1194,24 +1204,24 @@ nabu_keyboard_reader(void)
 			debug_printf("DEBUG: %s: adding KBD code 0x%02x\n",
 			    __func__, c);
 			queue_add(&kbd_context.queue, c);
+		} else {
+			debug_printf("DEBUG: %s: ignored KBD code 0x%02x\n",
+			    __func__, c);
 		}
 	}
 }
 
-#define	VERSION_MAJOR	0
-#define	VERSION_MINOR	2
-
 int
 main(void)
 {
+	extern const char version_string[];
 	uint32_t now;
 	uint actual_baud;
 
 	/* TinyUSB SDK board init - initializes LED and console UART (0). */
 	board_init();
 
-	printf("NABU Keyboard -> USB HID Adapter %d.%d\n",
-	    VERSION_MAJOR, VERSION_MINOR);
+	printf("NABU Keyboard -> USB HID Adapter %s\n", version_string);
 	printf("Copyright (c) 2022 Jason R. Thorpe\n\n");
 
 	printf("Disabling keyboard power.\n");

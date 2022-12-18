@@ -138,13 +138,15 @@ tud_descriptor_configuration_cb(uint8_t index)
 // String Descriptors
 //--------------------------------------------------------------------+
 
+const char version_string[] = "v0.4";
+
 // array of pointer to string descriptors
 static char const* string_desc_arr[] =
 {
   (const char[]) { 0x09, 0x04 },  // 0: is supported language is English (0x0409)
   "@thorpej",                     // 1: Manufacturer
   "NABU Keyboard Adapter",        // 2: Product
-  "666",                          // 3: Serials, should use chip ID
+  version_string,                 // 3: Serials, should use chip ID
   "Keyboard",                     // 4: Interface 1 String
   "Joystick 0",                   // 5: Interface 2 String
   "Joystick 1",                   // 6: Interface 3 String
