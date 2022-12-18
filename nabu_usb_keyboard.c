@@ -756,8 +756,8 @@ kbd_reboot(void)
 	/* Power down the keyboard. */
 	kbd_setpower(false);
 
-	/* Wait for 500ms. */
-	sleep_ms(500);
+	/* Wait for 4 seconds. */
+	sleep_ms(4000);
 
 	/* Reset all of the queues. */
 	queue_drain(&kbd_context.queue);
@@ -782,7 +782,7 @@ kbd_reboot(void)
 }
 
 #define	DEADCHECK_WARN_MS	5000
-#define	DEADCHECK_DECLARE_MS	8000
+#define	DEADCHECK_DECLARE_MS	10000
 
 static void
 kbd_deadcheck(uint32_t now)
