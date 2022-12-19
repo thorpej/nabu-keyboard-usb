@@ -48,7 +48,6 @@
  *
  * TODO:
  * - Handle the host requesting Boot protocol (rather than Report protocol).
- * - Figure out something to map to ALT/OPT.
  */
 
 /* Pico SDK headers */
@@ -67,10 +66,6 @@
 #include <string.h>
 
 /* Local headers */
-
-#if 0
-#define	SIMULATE_KEYSTROKES	/* simulate keystrokes for debugging */
-#endif
 
 /*
  * GP22 (physical pin 29 on the DIP-40 Pico) is a debug-enable strapping
@@ -100,15 +95,6 @@ static bool debug_enabled;
  * GP26 high completes the keyboard power supply circuit powers it on.
  */
 #define	PWREN_PIN		26
-
-#ifdef SIMULATE_KEYSTROKES
-/*
- * GP14 and GP15 (physical pins 22 and 21) are sampled to simulate
- * sending a Cmd-c and Cmd-v, respectively.
- */
-#define	CMD_C_PIN		17
-#define	CMD_V_PIN		16
-#endif /* SIMULATE_KEYSTROKES */
 
 /*
  * Circular queue between the the UART receiver and the USB sender.
@@ -1188,72 +1174,8 @@ kbd_getc(void)
 	uint32_t now;
 	uint8_t c;
 
-#ifdef SIMULATE_KEYSTROKES
-	static int start_ms = 0;
-	static int idx = 0;
-	static const char str[] = "Oink!\n";
-					  /* SYMd       SYMu       */
-	static const uint8_t cmd_c_seq[] = { 0xe8, 'c', 0xf8, 0xff };
-	static const uint8_t cmd_v_seq[] = { 0xe8, 'v', 0xf8, 0xff };
-	static const uint8_t *seq = NULL;
-	static int seqidx = 0;
-
-	/*
-	 * 6 second delay (to trigger "waiting for..." message), then a
-	 * simulated reset, another 1 second delay, then simulated
-	 * keystroke once per second until the end of the simulated
-	 * sequence.  After that, we just send the ping every 4 seconds
-	 * and check for Cmd-c / Cmd-v.
-	 */
-
-	for (;;) {
-		if (seq != NULL) {
-			c = seq[seqidx++];
-			if (c != 0xff) {
-				goto out;
-			}
-			seq = NULL;
-			seqidx = 0;
-		}
-
-		if ((now = board_millis()) - start_ms < 1000) {
-			continue;
-		}
-
-		start_ms += 1000;
-
-		if (start_ms == 6000) {
-			debug_printf("DEBUG: %s: Injecting ERR_RESET\n",
-			    __func__);
-			c = NABU_CODE_ERR_RESET;
-			goto out;
-		} else if (start_ms >= 5000 && (c = str[idx]) != '\0') {
-			debug_printf("DEBUG: %s: Injecting '%c'\n",
-			    __func__, c);
-			idx++;
-			goto out;
-		} else if ((start_ms % 4000) == 0) {
-			debug_printf("DEBUG: %s: Injecting ERR_PING\n",
-			  __func__);
-			c = NABU_CODE_ERR_PING;
-			goto out;
-		} else if (! gpio_get(CMD_C_PIN)) {
-			debug_printf("DEBUG: %s: Injecting Cmd-c sequence\n",
-			    __func__);
-			seq = cmd_c_seq;
-			/* handled on the go-around */
-		} else if (! gpio_get(CMD_V_PIN)) {
-			debug_printf("DEBUG: %s: Injecting Cmd-v sequence\n",
-			    __func__);
-			seq = cmd_v_seq;
-			/* handled on the go-around */
-		}
-	}
- out:
-#else
 	c = uart_getc(uart1);
 	now = board_millis();
-#endif /* SIMULATE_KEYSTROKES */
 
 	last_kbd_message_time = now;
 	return c;
