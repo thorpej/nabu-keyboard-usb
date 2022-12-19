@@ -1289,14 +1289,6 @@ main(void)
 		uart_getc(uart1);
 	}
 
-#ifdef SIMULATE_KEYSTROKES
-	printf("Initializing simulated Cmd-c and Cmd-v.\n");
-	gpio_init(CMD_C_PIN);
-	gpio_pull_up(CMD_C_PIN);
-	gpio_init(CMD_V_PIN);
-	gpio_pull_up(CMD_V_PIN);
-#endif /* SIMULATE_KEYSTROKES */
-
 	printf("Initializing USB stack.\n");
 	tusb_init();
 
