@@ -191,33 +191,109 @@ queue_drain(struct queue *q)
 	mutex_exit(&q->mutex);
 }
 
-/*
- * Standard TinyUSB example LED blink pattern.
- */
-#define	BLINK_NOT_MOUNTED	250
-#define	BLINK_MOUNTED		1000
-#define	BLINK_SUSPENDED		2500
+static bool suspended = false;
+static bool mounted = false;
+static bool want_remote_wakeup = false;
+static bool have_nabu = false;
 
-static uint32_t blink_interval_ms = BLINK_NOT_MOUNTED;
+/*
+ * LED blinking patterns.  Even indices are ON time, odd indices are
+ * OFF time.  -1 means "go back to beginning".
+ */
+
+/* 250ms on, 250ms off */
+static const int ledseq_not_mounted[] = {
+	250, 250, -1
+};
+
+/* 1000ms on, 1000ms off */
+static const int ledseq_wait_nabu[] = {
+	1000, 1000, -1
+};
+
+/* Heartbeat pattern. */
+static const int ledseq_healthy[] = {
+	100, 300, 100, 1000, -1
+};
+
+/* 2500ms on, 2500ms off */
+static const int ledseq_suspended[] = {
+	2500, 2500, -1
+};
+
+struct {
+	const int *sequence;
+	uint idx;
+	uint32_t start_ms;
+	bool state;
+} led_context;
+
+static void
+led_set_sequence(const int *seq)
+{
+	if (led_context.sequence == seq) {
+		return;
+	}
+
+	led_context.sequence = seq;
+	led_context.idx = 0;
+	led_context.start_ms = board_millis();
+	led_context.state = true;
+
+	board_led_write(led_context.state);
+}
+
+static void
+led_select_sequence(void)
+{
+	if (led_context.sequence == NULL) {
+		return;
+	}
+
+	if (suspended) {
+		led_set_sequence(ledseq_suspended);
+		return;
+	}
+
+	if (!mounted) {
+		led_set_sequence(ledseq_not_mounted);
+		return;
+	}
+
+	if (have_nabu) {
+		led_set_sequence(ledseq_healthy);
+		return;
+	}
+
+	led_set_sequence(ledseq_wait_nabu);
+}
 
 static void
 led_task(uint32_t now)
 {
-	static uint32_t start_ms = 0;
-	static bool led_state = false;
+	int interval;
 
-	if (now - start_ms < blink_interval_ms) {
+	if (led_context.sequence == NULL) {
 		return;
 	}
 
-	start_ms += blink_interval_ms;
+	interval = led_context.sequence[led_context.idx];
 
-	board_led_write(led_state);
-	led_state ^= true;
+	if (now - led_context.start_ms < interval) {
+		return;
+	}
+
+	led_context.start_ms += interval;
+
+	if ((interval = led_context.sequence[++led_context.idx]) == -1) {
+		interval = led_context.sequence[0];
+		led_context.idx = 0;
+	}
+
+	led_context.state ^= true;
+
+	board_led_write(led_context.state);
 }
-
-static bool want_remote_wakeup = false;
-static bool have_nabu = false;
 
 /*
  * Map NABU keycodes to HID key codes.
@@ -755,6 +831,7 @@ kbd_setpower(bool enabled)
 	gpio_put(PWREN_PIN, enabled);
 	if (! enabled) {
 		have_nabu = false;
+		led_select_sequence();
 	}
 }
 
@@ -850,6 +927,8 @@ kbd_err_task(uint8_t c)
 		break;
 
 	case NABU_CODE_ERR_PING:
+		have_nabu = true;
+		led_select_sequence();
 		debug_printf("DEBUG: %s: received PING from keyboard.\n",
 		    __func__);
 		return false;
@@ -857,6 +936,7 @@ kbd_err_task(uint8_t c)
 	case NABU_CODE_ERR_RESET:
 		/* Keyboard has announced itself! */
 		have_nabu = true;
+		led_select_sequence();
 		printf("INFO: received RESET notification from keyboard.\n",
 		    __func__);
 		return false;
@@ -1001,7 +1081,8 @@ hid_task(uint32_t now)
 void
 tud_mount_cb(void)
 {
-	blink_interval_ms = BLINK_MOUNTED;
+	mounted = true;
+	led_select_sequence();
 }
 
 /*
@@ -1010,7 +1091,8 @@ tud_mount_cb(void)
 void
 tud_umount_cb(void)
 {
-	blink_interval_ms = BLINK_NOT_MOUNTED;
+	mounted = false;
+	led_select_sequence();
 }
 
 /*
@@ -1027,7 +1109,8 @@ void
 tud_suspend_cb(bool remote_wakeup_en)
 {
 	want_remote_wakeup = remote_wakeup_en;
-	blink_interval_ms = BLINK_SUSPENDED;
+	suspended = true;
+	led_select_sequence();
 }
 
 /*
@@ -1036,7 +1119,8 @@ tud_suspend_cb(bool remote_wakeup_en)
 void
 tud_resume_cb(void)
 {
-	blink_interval_ms = BLINK_MOUNTED;
+	suspended = false;
+	led_select_sequence();
 }
 
 /*
@@ -1228,6 +1312,9 @@ main(void)
 	gpio_init(PWREN_PIN);
 	gpio_set_dir(PWREN_PIN, GPIO_OUT);
 	kbd_setpower(false);
+
+	printf("Initializing status LED.\n");
+	led_set_sequence(ledseq_not_mounted);
 
 	/*
 	 * Sample the debug strapping pin.  If it's tied to GND, then we
