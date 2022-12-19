@@ -48,7 +48,6 @@
  *
  * TODO:
  * - Handle the host requesting Boot protocol (rather than Report protocol).
- * - Figure out something to map to ALT/OPT.
  */
 
 /* Pico SDK headers */
