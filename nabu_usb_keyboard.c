@@ -169,13 +169,11 @@ queue_consume(struct queue *q, uint8_t *vp, bool advance)
 	return rv;
 }
 
-#if 0
 static bool
 queue_peek(struct queue *q, uint8_t *vp)
 {
 	return queue_consume(q, vp, false);
 }
-#endif
 
 static bool
 queue_get(struct queue *q, uint8_t *vp)
@@ -250,13 +248,13 @@ led_select_sequence(void)
 		return;
 	}
 
-	if (suspended) {
-		led_set_sequence(ledseq_suspended);
+	if (!mounted) {
+		led_set_sequence(ledseq_not_mounted);
 		return;
 	}
 
-	if (!mounted) {
-		led_set_sequence(ledseq_not_mounted);
+	if (suspended && !want_remote_wakeup) {
+		led_set_sequence(ledseq_suspended);
 		return;
 	}
 
@@ -824,10 +822,12 @@ send_kbd_report(uint16_t code)
  * byte from the keyboard.
  */
 static volatile uint32_t last_kbd_message_time;	/* in milliseconds */
+static bool kbd_powerstate;
 
 static void
 kbd_setpower(bool enabled)
 {
+	kbd_powerstate = enabled;
 	gpio_put(PWREN_PIN, enabled);
 	if (! enabled) {
 		have_nabu = false;
@@ -879,8 +879,11 @@ kbd_deadcheck(uint32_t now)
 		return;
 	}
 
-	/* A deadcheck when we haven't yet seen the keyboard is pointless. */
-	if (! have_nabu) {
+	/*
+	 * A deadcheck when we haven't yet seen the keyboard or when the
+	 * keyboard is powered off is pointless.
+	 */
+	if (!have_nabu || !kbd_powerstate) {
 		/* Suppress for another deadcheck interval. */
 		last_kbd_message_time = now;
 		printf("INFO: waiting for keyboard.\n");
@@ -987,6 +990,17 @@ hid_task(uint32_t now)
 	 * around.
 	 */
 	if (tud_suspended()) {
+		/*
+		 * Peek at the keyboard; if it's an error code,
+		 * process it and get out.
+		 */
+		if (queue_peek(&kbd_context.queue, &c) &&
+		    NABU_CODE_ERR_P(c) &&
+		    c != NABU_CODE_ERR_MKEY /* this is a key-press */) {
+			queue_get(&kbd_context.queue, &c);
+			kbd_err_task(c);
+			return;
+		}
 		if (want_remote_wakeup) {
 			tud_remote_wakeup();
 			want_remote_wakeup = false;
@@ -1103,13 +1117,19 @@ tud_umount_cb(void)
  *
  * Within 7ms, we must drop our current draw to less than 2.5mA from
  * the bus.  Not a problem, since we require an external power source
- * for the keyboard anyway.
+ * for the keyboard anyway.  But we do power the keyboard off to make
+ * sure that we don't erroneously wake up the host due to pings or
+ * errors.
  */
 void
 tud_suspend_cb(bool remote_wakeup_en)
 {
 	want_remote_wakeup = remote_wakeup_en;
 	suspended = true;
+	if (!want_remote_wakeup) {
+		printf("INFO: Powering down keyboard for suspend request.\n");
+		kbd_setpower(false);
+	}
 	led_select_sequence();
 }
 
@@ -1120,6 +1140,10 @@ void
 tud_resume_cb(void)
 {
 	suspended = false;
+	if (!kbd_powerstate) {
+		printf("INFO: Powering up keyboard for resume request.\n");
+		kbd_setpower(true);
+	}
 	led_select_sequence();
 }
 
