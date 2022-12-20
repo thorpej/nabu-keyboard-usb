@@ -98,6 +98,14 @@ two different special keys since special keys are not affected by the SHIFT keys
 we're using a special key for **Alt**, we can still type guillemets on a Mac by using **TV/NABU** plus
 the **YES** and **NO** keys.  _«Absolument merveilleux !», a-t-il déclaré._
 
+Ok! To summarize the special keys:
+* **Up**, **Down**, **Left**, and **Right** arrow keys map to their regular US keyboard equivalents.
+* **<|||** maps to **Page Up** and **|||>** maps to **Page Down** (very useful for scrolling in Terminal on macOS).
+* **SYM** maps to **Meta**, a.k.a. **Windows**, **Command**, **GUI**, **⌘**, etc.
+* **TV/NABU** maps to **Alt**, a.k.a. **Option**, **⌥**, etc.
+* **NO** maps to **\\**, a.k.a. backslash.
+* **YES** maps to **|**, a.k.a. pipe, vertical bar, etc. 
+
 ### TinyUSB device task
 
 This is just a call into the TinyUSB library that performs device-side processing.  From here, various
@@ -129,9 +137,10 @@ the keyboard input.
 
 ### Keyboard power supply / control
 
-The board has a 5.5mm x 2.1mm barrel jack for power input from an external 9V power brick.  The
-positive terminal from this supply goes stright to the keyboard.  The power return line from the
-keyboard is attached to the drain of an IRLU110PBF power MOSFET, and the MOSFET's source is
+The board has a 5.5mm x 2.1mm center-positive barrel jack for power input from an external 9V power
+brick.  There is a diode in-series with the positive terminal as reverse-polarity protection.
+The positive terminal from this supply goes stright to the keyboard.  The power return line
+from the keyboard is attached to the drain of an IRLU110PBF power MOSFET, and the MOSFET's source is
 then connected to the negative terminal of the supply, which is also connected to the board's
 ground plane.  The gate is normally pulled down, but can be driven high by a pin on the Pico to
 complete the circuit and power on the keyboard.  The IRLU110PBF was selected for its current
@@ -200,3 +209,47 @@ will fit the board footprints.  I've done the same with the resistors.
 * 1 - [PCB-mount DIN-6 jack, CLIFF FC680806 or equivalent](https://www.newark.com/cliff-electronic-components/fc680806/din-audio-video-conn-jack-6pos/dp/99AC9154)
 * 1 - [9V @ 500mA-or-better DC power brick with 5.5mm x 2.1mm barrel connector](https://www.mouser.com/ProductDetail/490-SWI12-9-N-P5)
 * 1 - Micro-USB cable for connecting the adapter to your computer.
+
+### Assembling the board
+
+You might have your own favorite way of putting these things together.  If so, hey, you do you!
+But for those of you who don't, let me recommend a few basic pointers that will help making the
+going a little easier.  I'm going to assume that you already know the basics of soldering.
+
+First, it's best to assemble the lowest-profile components first, increasing the height of the board
+as you go along.  With that in mind, here is the order I would recommend:
+
+1. R1 and Q1 (the parts that sit beneath the Pico)
+2. D1
+3. U1 and U3 (or their sockets)
+4. C1, C2, C3, and C4
+5. R2 (the vertically-mounted resistor next to C3 and C4)
+6. Female pin heders for U2 (the Pico)
+7. J1 and JP1 (the male pin headers)
+8. J3 (the DC barrel jack)
+9. J2 (the DIN-6 jack)
+
+If you already installed the pin headers into your Pico, or bought the Pico with the pin headers
+pre-installed (hopefully with the long end of the pins facing downwards), then cool!  Otherwise,
+a trick that makes it easy is to place the pin headers into the Pico (with the plastic holder on
+the bottom of the Pico and she short end of the pins poking through the Pico board) and then press
+that as a unit into the female headers installed on the adapter board.  That will hold everything
+steady while you solder the pin headers to the Pico itself.
+
+### Programming the Pico with the NABU Keyboard to USB firmware
+
+Ok, so you've built the board, now you need to get the firmware onto the Pico.  This is easy!  There's
+a small button on the Pico board.  What you need to do is to hold that button down while you connect
+the Pico to your computer using the USB cable.  When you do that, the Pico will appear on your computer
+as a hard drive with a FAT file system on it named "RPI-RP2" (exactlty how this appears on your computer
+is left as an exercise to the reader).  All you need to do is copy the provided **_nabu_usb_keyboard.uf2_**
+file onto that file system _et viola!_ your Pico is programmed and has now attached itself as a USB HID
+devies with 1 keyboard interface and 2 game pad interfaces!
+
+Once you've programmed the Pico, you're all set.  At this point, I recommend unplugging it from the
+computer before attaching the 9V power brick and NABU keyboard.  Once everything is cabled up, plug
+the Pico back into your computer and enjoy typing on those sweet, sweet ALPS key switches!
+
+I hope you have fun with your NABU and I hope you enjoy this silly little project of mine!  If you end
+up playing with it, I'd love to hear from you!  You can find me on [Mastodon](https://mastodon.sdf.org/@thorpej)
+and on [Twitter](https://twitter.com/thorpej) (for as long as it lasts, anyway).
