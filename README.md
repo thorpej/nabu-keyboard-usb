@@ -203,8 +203,8 @@ will fit the board footprints.  I've done the same with the resistors.
 * 1 - [IRLU110PBF](https://www.mouser.com/ProductDetail/844-IRLU110PBF) or equivalent power MOSFET in TO-251-3 package with GDS pin configuration
 * 2 - [100nF / 0.1µF ceramic capacitor](https://www.mouser.com/ProductDetail/581-SR215E104MAR)
 * 2 - [1nF / 1000pF ceramic capacitor](https://www.mouser.com/ProductDetail/581-SR215A102JARTR1)
-* 1 - [180 Ohm resistor](https://www.mouser.com/ProductDetail/603-MFR50SFTE52-180R) that fits in a DIN0207 footprint.
-* 1 - [10K Ohm resistor](https://www.mouser.com/ProductDetail/603-MFR50SFTE52-10K) that fits in a DIN0207 footprint.
+* 1 - [180 Ohm resistor](https://www.mouser.com/ProductDetail/603-MFR50SFTE52-180R) that fits in a DIN0207 vertical footprint.
+* 1 - [10K Ohm resistor](https://www.mouser.com/ProductDetail/603-MFR50SFTE52-10K) that fits in a DIN0207 horizontal footprint.
 * 1 - [PCB-mount 5.5mm x 2.1mm DC barrel jack](https://www.mouser.com/ProductDetail/163-179PH-EX)
 * 1 - [PCB-mount DIN-6 jack, CLIFF FC680806 or equivalent](https://www.newark.com/cliff-electronic-components/fc680806/din-audio-video-conn-jack-6pos/dp/99AC9154)
 * 1 - [9V @ 500mA-or-better DC power brick with 5.5mm x 2.1mm barrel connector](https://www.mouser.com/ProductDetail/490-SWI12-9-N-P5)
