@@ -103,3 +103,100 @@ the **YES** and **NO** keys.  _«Absolument merveilleux !», a-t-il déclaré._
 This is just a call into the TinyUSB library that performs device-side processing.  From here, various
 callbacks back into the main adapter code can be made to fetch descriptors, reports, and set
 suspend/resume state.
+
+## The hardware
+
+The hardware is very simple and is centered around the Raspberry Pi Pico microcontroller board,
+wich provides a UART for the debug console, a UART for the keyboard interface, the USB interface
+to the host, and general-purpose I/O facilities for configuration of the adapter and control of
+the keyboard's power supply.
+
+Note that the adapter board has 3 separate power rails: +5V (supplied by the USB host), +3V3 (from
+the Pico's on-board regulator), and +9V (from an external DC power brick, for the keyboard).
+
+### Keyboard input
+
+The keyboard uses RS422 differential signalling, so a SN75176A differential bus transciever is used
+to convert the keyboard signalling to a TTL-compatible signal.  The transient suppression circuitry
+mimics that present in the NABU PC.
+
+The output of the SN75176A is at 5V TTL logic levels, but the Pico's I/O interface operates at 3V3
+CMOS logic levels, so a level shifter must be used.  I just picked the 74LVC245 bus transciever for
+the job because I had plenty of them handy, even though it's slight overkill.
+
+The 74LVC245's output is connected to the Rx pin of UART1 on the Pico.  That's pretty much it for
+the keyboard input.
+
+### Keyboard power supply / control
+
+The board has a 5.5mm x 2.1mm barrel jack for power input from an external 9V power brick.  The
+positive terminal from this supply goes stright to the keyboard.  The power return line from the
+keyboard is attached to the drain of an IRLU110PBF power MOSFET, and the MOSFET's source is
+then connected to the negative terminal of the supply, which is also connected to the board's
+ground plane.  The gate is normally pulled down, but can be driven high by a pin on the Pico to
+complete the circuit and power on the keyboard.  The IRLU110PBF was selected for its current
+rating, relatively low as far as power MOSFETs go (1V) Vgs threshold, and < 1 Ohm Rds-ON.
+There's nothing particularly special about it otherwise, and this application isn't especially
+demanding, so feel free to substitute your favorite MOSFET (so long as it is in a TO-251-3
+package and has a GDS pin configuration).
+
+### Pin headers
+
+There are 2 pin headers on the board:
+* J1 provides access to UART0 on the Pico, so you can see informational or debug messages that are logged by the firmware running on the Pico.
+* JP1, when connected, enables those fairly verbose debugging messages.  The pin is sampled when the adapter starts up, so enabling them requires unplugging the adapter from USB and plugging it back in after connecting the jumper.
+
+### The board layout
+
+I am definitely an amateur when it comes to PCB design and layout, but I did try to keep the board
+fairly small while still making it easy to assemble (all through-hole parts except for the tab on
+the power MOSFET which you don't even _really_ have to solder if that's your preference).  The
+footprints for the decoupling caps and suppression caps are fairly forgiving, so if you have 1nF and
+100nF caps in your parts bin that fit the footprint, by all means use them.
+
+You will need to put downward-facing pin headers onto your Pico and install female pin header stand-offs
+onto the board.  This is because I squeezed the power MOSFET and its pulldown resistor under the Pico.
+This isn't really much of a compromise in height since there's a big ol' DIN-6 socket at the back of the
+board anyhow.  (The board size is largely dictated by the external connections.)
+
+Space for sockets for the DIP ICs is provided because I like to use them.  Feel free to elide if that's
+that floats your boat.
+
+There are a couple of "special" parts on the board:
+* The resistors used on the board are fairly small for through-hole resistors, selected to reduce space requirements.  Happily, they're readily available from Mouser.
+* The DIN-6 socket is harder to get than it should be (plenty of panel-mount flavors, but not PCB-mount, sigh).  The one I selected was the CLIFF FC680806, available from Newark / element14 / Farnell.  The Hirschmann 930 778-200 may also work, and there's a no-name version on Amazon that looks like a copy of the CLIFF part.
+
+I expect to make small tweaks to the board over time, but mainly just to get alignment of various
+externally-facing parts Just Right(tm) in the event that some enterprising individual wants to make
+a 3D-printed enclosure for it (**_hey, if you want to do this, please get in contact with me!_**).
+
+In addition to the KiCad design files, a PDF version of the schematic and board images are also provided,
+along with the Gerber files needed to have the board made by your favorite PCB fabrication house.
+
+### So what do I need to build one of these things?
+
+Most of the parts requires are bog-standard, available from lots of places.  The Raspberry Pi Pico,
+the DIP sockets, and the male and female pin headers can all be acquired from Amazon.  If you want
+nice machined DIP sockets instead of the cheap stamped kind, you can get those from
+[Phoenix Enterprises](https://www.peconnectors.com/sockets-dip-ic-machined/), but they have a minimum
+order.  The ceramic capacitors are basic parts, but I've provided links to specific parts that I know
+will fit the board footprints.  I've done the same with the resistors.
+
+* 1 - Raspberry Pi Pico
+* 2 - 20x1 2.54mm pin header (for the Pico)
+* 1 - 2x1 2.54mm pin header (optional) (for debug jumper)
+* 1 - 3x1 2.54mm pin header (optional) (for debug console)
+* 2 - 20x1 2.54mm female pin header (to receive the Pico - _cannot be low-profile - space beneath the Pico is required_)
+* 1 - DIP-20 socket (optional)
+* 1 - DIP-8 socket (optional)
+* 1 - [SN74LVC245](https://www.mouser.com/ProductDetail/595-SN74LVC245ANE4) in DIP-20 package
+* 1 - [SN75176A](https://www.mouser.com/ProductDetail/595-SN75176AP) in DIP-8 package
+* 1 - [IRLU110PBF](https://www.mouser.com/ProductDetail/844-IRLU110PBF) or equivalent power MOSFET in TO-251-3 package with GDS pin configuration
+* 2 - [100nF / 0.1µF ceramic capacitor](https://www.mouser.com/ProductDetail/581-SR215E104MAR)
+* 2 - [1nF / 1000pF ceramic capacitor](https://www.mouser.com/ProductDetail/581-SR215A102JARTR1)
+* 1 - [180 Ohm resistor](https://www.mouser.com/ProductDetail/603-MFR50SFTE52-180R) that fits in a DIN0207 footprint.
+* 1 - [10K Ohm resistor](https://www.mouser.com/ProductDetail/603-MFR50SFTE52-10K) that fits in a DIN0207 footprint.
+* 1 - [PCB-mount 5.5mm x 2.1mm DC barrel jack](https://www.mouser.com/ProductDetail/163-179PH-EX)
+* 1 - [PCB-mount DIN-6 jack, CLIFF FC680806 or equivalent](https://www.newark.com/cliff-electronic-components/fc680806/din-audio-video-conn-jack-6pos/dp/99AC9154)
+* 1 - [9V @ 500mA-or-better DC power brick with 5.5mm x 2.1mm barrel connector](https://www.mouser.com/ProductDetail/490-SWI12-9-N-P5)
+* 1 - Micro-USB cable for connecting the adapter to your computer.
