@@ -169,7 +169,7 @@ This isn't really much of a compromise in height since there's a big ol' DIN-6 s
 board anyhow.  (The board size is largely dictated by the external connections.)
 
 Space for sockets for the DIP ICs is provided because I like to use them.  Feel free to elide if that's
-that floats your boat.
+what floats your boat.
 
 There are a couple of "special" parts on the board:
 * The resistors used on the board are fairly small for through-hole resistors, selected to reduce space requirements.  Happily, they're readily available from Mouser.
