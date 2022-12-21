@@ -138,7 +138,7 @@ tud_descriptor_configuration_cb(uint8_t index)
 // String Descriptors
 //--------------------------------------------------------------------+
 
-const char version_string[] = "v0.4";
+const char version_string[] = "v0.5";
 
 // array of pointer to string descriptors
 static char const* string_desc_arr[] =

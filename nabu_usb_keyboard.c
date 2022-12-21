@@ -872,20 +872,22 @@ kbd_deadcheck(uint32_t now)
 	if (!have_nabu || !kbd_powerstate) {
 		/* Suppress for another deadcheck interval. */
 		last_kbd_message_time = now;
-		printf("INFO: waiting for keyboard.\n");
+		printf("[%10u] INFO: waiting for keyboard.\n", board_millis());
 		return;
 	}
 
 	if (now - last_kbd_message_time < DEADCHECK_DECLARE_MS) {
 		if (! deadcheck_warned) {
-			printf("WARNING: keyboard failed to ping.\n");
+			printf("[%10u] WARNING: keyboard failed to ping.\n",
+			    board_millis());
 			deadcheck_warned = true;
 		}
 		return;
 	}
 
 	/* Declare the keyboard dead and reboot it. */
-	printf("ERROR: keyboard appears dead, rebooting...\n");
+	printf("[%10u] ERROR: keyboard appears dead, rebooting...\n",
+	    board_millis());
 	kbd_reboot();
 	deadcheck_warned = false;
 }
@@ -895,24 +897,24 @@ kbd_err_task(uint8_t c)
 {
 	switch (c) {
 	case NABU_CODE_ERR_MKEY:
-		printf("INFO: %s: multi-keypress, sending HID_KEY_NONE.\n",
-		    __func__);
+		printf("[%10u] INFO: multi-keypress, sending HID_KEY_NONE.\n",
+		    board_millis());
 		send_kbd_report(HID_KEY_NONE);
 		return false;
 
 	case NABU_CODE_ERR_RAM:
-		printf("ERROR: %s: keyboard RAM error, rebooting...\n",
-		     __func__);
+		printf("[%10u] ERROR: keyboard RAM error, rebooting...\n",
+		     board_millis());
 		break;
 
 	case NABU_CODE_ERR_ROM:
-		printf("ERROR: %s: keyboard ROM error, rebooting...\n",
-		     __func__);
+		printf("[%10u] ERROR: keyboard ROM error, rebooting...\n",
+		     board_millis());
 		break;
 
 	case NABU_CODE_ERR_ISR:
-		printf("ERROR: %s: keyboard ISR error, rebooting...\n",
-		     __func__);
+		printf("[%10u] ERROR: keyboard ISR error, rebooting...\n",
+		     board_millis());
 		break;
 
 	case NABU_CODE_ERR_PING:
@@ -926,8 +928,9 @@ kbd_err_task(uint8_t c)
 		/* Keyboard has announced itself! */
 		have_nabu = true;
 		led_select_sequence();
-		printf("INFO: received RESET notification from keyboard.\n",
-		    __func__);
+		printf(
+		    "[%10u] INFO: received RESET notification from keyboard.\n",
+		    board_millis());
 		return false;
 
 	default:
@@ -1113,7 +1116,9 @@ tud_suspend_cb(bool remote_wakeup_en)
 	want_remote_wakeup = remote_wakeup_en;
 	suspended = true;
 	if (!want_remote_wakeup) {
-		printf("INFO: Powering down keyboard for suspend request.\n");
+		printf(
+		  "[%10u] INFO: Powering down keyboard for suspend request.\n",
+		  board_millis());
 		kbd_setpower(false);
 	}
 	led_select_sequence();
@@ -1127,7 +1132,9 @@ tud_resume_cb(void)
 {
 	suspended = false;
 	if (!kbd_powerstate) {
-		printf("INFO: Powering up keyboard for resume request.\n");
+		printf(
+		    "[%10u] INFO: Powering up keyboard for resume request.\n",
+		    board_millis());
 		kbd_setpower(true);
 	}
 	led_select_sequence();
