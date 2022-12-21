@@ -5,7 +5,7 @@ $Descr A4 11693 8268
 encoding utf-8
 Sheet 1 1
 Title "NABU Keyboard to USB Adapter"
-Date "2022-12-13"
+Date "2022-12-19"
 Rev "0.1"
 Comp "(c) 2022 Jason R. Thorpe. See LICENSE."
 Comment1 ""
@@ -111,7 +111,7 @@ U 1 1 6399E854
 P 5500 5850
 F 0 "C1" H 5592 5896 50  0000 L CNN
 F 1 "0.1µF" H 5592 5805 50  0000 L CNN
-F 2 "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm" H 5500 5850 50  0001 C CNN
+F 2 "Capacitor_THT:C_Disc_D6.0mm_W4.4mm_P5.00mm" H 5500 5850 50  0001 C CNN
 F 3 "~" H 5500 5850 50  0001 C CNN
 	1    5500 5850
 	1    0    0    -1  
@@ -142,7 +142,7 @@ U 1 1 639AB15D
 P 5950 5850
 F 0 "C2" H 6042 5896 50  0000 L CNN
 F 1 "0.1µF" H 6042 5805 50  0000 L CNN
-F 2 "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm" H 5950 5850 50  0001 C CNN
+F 2 "Capacitor_THT:C_Disc_D6.0mm_W4.4mm_P5.00mm" H 5950 5850 50  0001 C CNN
 F 3 "~" H 5950 5850 50  0001 C CNN
 	1    5950 5850
 	1    0    0    -1  
@@ -268,23 +268,6 @@ F 3 "" H 6550 1900 50  0001 C CNN
 	1    6550 1900
 	0    1    1    0   
 $EndComp
-$Comp
-L Connector:Conn_01x03_Male J2
-U 1 1 639B268F
-P 7300 3300
-F 0 "J2" H 7408 3581 50  0000 C CNN
-F 1 "Debug Event Header" H 7400 3500 50  0000 C CNN
-F 2 "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical" H 7300 3300 50  0001 C CNN
-F 3 "~" H 7300 3300 50  0001 C CNN
-	1    7300 3300
-	-1   0    0    -1  
-$EndComp
-Text Notes 7350 3250 0    39   ~ 0
-GND
-Text Notes 7350 3350 0    39   ~ 0
-C
-Text Notes 7350 3450 0    39   ~ 0
-V
 Wire Wire Line
 	3500 2100 3500 4900
 Wire Wire Line
@@ -354,24 +337,24 @@ NoConn ~ 5500 3600
 NoConn ~ 5600 3600
 NoConn ~ 5700 3600
 $Comp
-L Connector:DIN-6 J3
+L Connector:DIN-6 J2
 U 1 1 639C63C6
 P 7000 4800
-F 0 "J3" H 7000 5281 50  0000 C CNN
+F 0 "J2" H 7000 5281 50  0000 C CNN
 F 1 "DIN-6" H 7000 5190 50  0000 C CNN
-F 2 "Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Horizontal" H 7000 4800 50  0001 C CNN
+F 2 "jrt-Connectors:Jack_DIN-6_CLIFF_FC680806" H 7000 4800 50  0001 C CNN
 F 3 "https://datasheet.octopart.com/MAB-6-H-Hirschmann-datasheet-569838.pdf" H 7000 4800 50  0001 C CNN
 F 4 "" H 7000 4800 50  0001 C CNN "Field4"
 	1    7000 4800
 	1    0    0    -1  
 $EndComp
 $Comp
-L Connector:Barrel_Jack_Switch J4
+L Connector:Barrel_Jack_Switch J3
 U 1 1 639C840A
 P 9550 2500
-F 0 "J4" H 9320 2542 50  0000 R CNN
+F 0 "J3" H 9320 2542 50  0000 R CNN
 F 1 "9V input" H 9320 2451 50  0000 R CNN
-F 2 "Connector_BarrelJack:BarrelJack_CUI_PJ-102AH_Horizontal" H 9600 2460 50  0001 C CNN
+F 2 "jrt-Connectors:Kobiconn_163-179PH-EX-5_5-2_1mm-1_5A" H 9600 2460 50  0001 C CNN
 F 3 "~" H 9600 2460 50  0001 C CNN
 	1    9550 2500
 	-1   0    0    -1  
@@ -381,7 +364,7 @@ L Device:Q_NMOS_GDS Q1
 U 1 1 639CB8E9
 P 8350 2400
 F 0 "Q1" H 8554 2446 50  0000 L CNN
-F 1 "SiHLU110-GE3" H 8554 2355 50  0000 L CNN
+F 1 "IRLU110PBF" H 8554 2355 50  0000 L CNN
 F 2 "Package_TO_SOT_THT:TO-251-3-1EP_Horizontal_TabDown" H 8550 2500 50  0001 C CNN
 F 3 "~" H 8350 2400 50  0001 C CNN
 	1    8350 2400
@@ -420,8 +403,6 @@ Wire Wire Line
 	9250 2400 9250 2250
 Wire Wire Line
 	10250 2250 10250 4500
-Wire Wire Line
-	10250 4500 7000 4500
 Wire Wire Line
 	9250 2250 10250 2250
 Wire Wire Line
@@ -468,13 +449,6 @@ $EndComp
 Wire Wire Line
 	10250 2250 10250 2050
 Connection ~ 10250 2250
-Wire Wire Line
-	6400 3200 7100 3200
-Connection ~ 6400 3200
-Wire Wire Line
-	6300 3300 7100 3300
-Wire Wire Line
-	6300 3400 7100 3400
 $Comp
 L power:GND #PWR0101
 U 1 1 639D5E47
@@ -487,28 +461,16 @@ F 3 "" H 4800 3200 50  0001 C CNN
 	0    1    1    0   
 $EndComp
 Connection ~ 4800 3200
-$Comp
-L power:GND #PWR0102
-U 1 1 639D6425
-P 6400 1700
-F 0 "#PWR0102" H 6400 1450 50  0001 C CNN
-F 1 "GND" V 6405 1572 50  0000 R CNN
-F 2 "" H 6400 1700 50  0001 C CNN
-F 3 "" H 6400 1700 50  0001 C CNN
-	1    6400 1700
-	0    -1   -1   0   
-$EndComp
-Connection ~ 6400 1700
 Text Label 8450 2100 0    50   ~ 0
 9VRET
 Wire Wire Line
 	8450 2100 8450 2200
 Connection ~ 8450 2200
 $Comp
-L Device:R_Small R?
+L Device:R_Small R2
 U 1 1 63A06755
 P 6600 5550
-F 0 "R?" V 6404 5550 50  0000 C CNN
+F 0 "R2" V 6404 5550 50  0000 C CNN
 F 1 "180" V 6495 5550 50  0000 C CNN
 F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical" H 6600 5550 50  0001 C CNN
 F 3 "~" H 6600 5550 50  0001 C CNN
@@ -537,10 +499,10 @@ Connection ~ 6450 5550
 Wire Wire Line
 	6450 5550 6450 5200
 $Comp
-L power:GND #PWR?
+L power:GND #PWR0103
 U 1 1 63A0CAA3
 P 6750 5800
-F 0 "#PWR?" H 6750 5550 50  0001 C CNN
+F 0 "#PWR0103" H 6750 5550 50  0001 C CNN
 F 1 "GND" H 6755 5627 50  0000 C CNN
 F 2 "" H 6750 5800 50  0001 C CNN
 F 3 "" H 6750 5800 50  0001 C CNN
@@ -548,10 +510,10 @@ F 3 "" H 6750 5800 50  0001 C CNN
 	1    0    0    -1  
 $EndComp
 $Comp
-L power:GND #PWR?
+L power:GND #PWR0104
 U 1 1 63A11E4C
 P 6450 5800
-F 0 "#PWR?" H 6450 5550 50  0001 C CNN
+F 0 "#PWR0104" H 6450 5550 50  0001 C CNN
 F 1 "GND" H 6455 5627 50  0000 C CNN
 F 2 "" H 6450 5800 50  0001 C CNN
 F 3 "" H 6450 5800 50  0001 C CNN
@@ -559,25 +521,54 @@ F 3 "" H 6450 5800 50  0001 C CNN
 	1    0    0    -1  
 $EndComp
 $Comp
-L Device:C_Small C?
+L Device:C_Small C3
 U 1 1 63A12AC5
 P 6450 5700
-F 0 "C?" H 6542 5746 50  0000 L CNN
+F 0 "C3" H 6542 5746 50  0000 L CNN
 F 1 "1nF" H 6542 5655 50  0000 L CNN
-F 2 "" H 6450 5700 50  0001 C CNN
+F 2 "Capacitor_THT:C_Disc_D6.0mm_W4.4mm_P5.00mm" H 6450 5700 50  0001 C CNN
 F 3 "~" H 6450 5700 50  0001 C CNN
 	1    6450 5700
 	1    0    0    -1  
 $EndComp
 $Comp
-L Device:C_Small C?
+L Device:C_Small C4
 U 1 1 63A131AF
 P 6750 5700
-F 0 "C?" H 6842 5746 50  0000 L CNN
+F 0 "C4" H 6842 5746 50  0000 L CNN
 F 1 "1nF" H 6842 5655 50  0000 L CNN
-F 2 "" H 6750 5700 50  0001 C CNN
+F 2 "Capacitor_THT:C_Disc_D6.0mm_W4.4mm_P5.00mm" H 6750 5700 50  0001 C CNN
 F 3 "~" H 6750 5700 50  0001 C CNN
 	1    6750 5700
 	1    0    0    -1  
 $EndComp
+$Comp
+L power:GND #PWR0102
+U 1 1 639D6425
+P 6400 3200
+F 0 "#PWR0102" H 6400 2950 50  0001 C CNN
+F 1 "GND" V 6405 3072 50  0000 R CNN
+F 2 "" H 6400 3200 50  0001 C CNN
+F 3 "" H 6400 3200 50  0001 C CNN
+	1    6400 3200
+	0    -1   -1   0   
+$EndComp
+Connection ~ 6400 3200
+$Comp
+L Diode:1N4001 D1
+U 1 1 63A35253
+P 8950 4500
+F 0 "D1" H 8950 4300 50  0000 C CNN
+F 1 "1N4001" H 8950 4400 50  0000 C CNN
+F 2 "Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal" H 8950 4325 50  0001 C CNN
+F 3 "http://www.vishay.com/docs/88503/1n4001.pdf" H 8950 4500 50  0001 C CNN
+	1    8950 4500
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	10250 4500 9100 4500
+Wire Wire Line
+	8800 4500 7000 4500
+NoConn ~ 6300 3300
+NoConn ~ 6300 3400
 $EndSCHEMATC
