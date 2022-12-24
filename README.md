@@ -173,7 +173,7 @@ what floats your boat.
 
 There are a couple of "special" parts on the board:
 * The resistors used on the board are fairly small for through-hole resistors, selected to reduce space requirements.  Happily, they're readily available from Mouser.
-* The DIN-6 socket is harder to get than it should be (plenty of panel-mount flavors, but not PCB-mount, sigh).  The one I selected was the CLIFF FC680806, available from Newark / element14 / Farnell.  The Hirschmann 930 778-200 may also work, and there's a no-name version on Amazon that looks like a copy of the CLIFF part.
+* The DIN-6 socket is harder to get than it should be (plenty of panel-mount flavors, but not PCB-mount, sigh).  The one I selected was the CLIFF FC680806, available from Newark / element14 / Farnell.  The Hirschmann 930 778-200 may also work, and there's a [no-name version on Amazon](https://www.amazon.com/dp/B015IGPKPK) that looks like a copy of the CLIFF part.
 
 I expect to make small tweaks to the board over time, but mainly just to get alignment of various
 externally-facing parts Just Right(tm) in the event that some enterprising individual wants to make
