@@ -13,7 +13,7 @@
   {
     "ProjectId":
     {
-      "Name": "nabu-usb-keyboard",
+      "Name": "nabu-keyboard-usb",
       "GUID": "6e616275-2d75-4736-922d-6b6579626f61",
       "Revision": "0.1"
     },
@@ -40,37 +40,37 @@
   "FilesAttributes":
   [
     {
-      "Path":  "nabu-usb-keyboard-F_Cu.gbr",
+      "Path":  "nabu-keyboard-usb-F_Cu.gbr",
       "FileFunction":  "Copper,L1,Top",
       "FilePolarity":  "Positive"
     },
     {
-      "Path":  "nabu-usb-keyboard-B_Cu.gbr",
+      "Path":  "nabu-keyboard-usb-B_Cu.gbr",
       "FileFunction":  "Copper,L2,Bot",
       "FilePolarity":  "Positive"
     },
     {
-      "Path":  "nabu-usb-keyboard-F_SilkS.gbr",
+      "Path":  "nabu-keyboard-usb-F_SilkS.gbr",
       "FileFunction":  "Legend,Top",
       "FilePolarity":  "Positive"
     },
     {
-      "Path":  "nabu-usb-keyboard-B_SilkS.gbr",
+      "Path":  "nabu-keyboard-usb-B_SilkS.gbr",
       "FileFunction":  "Legend,Bot",
       "FilePolarity":  "Positive"
     },
     {
-      "Path":  "nabu-usb-keyboard-F_Mask.gbr",
+      "Path":  "nabu-keyboard-usb-F_Mask.gbr",
       "FileFunction":  "SolderMask,Top",
       "FilePolarity":  "Negative"
     },
     {
-      "Path":  "nabu-usb-keyboard-B_Mask.gbr",
+      "Path":  "nabu-keyboard-usb-B_Mask.gbr",
       "FileFunction":  "SolderMask,Bot",
       "FilePolarity":  "Negative"
     },
     {
-      "Path":  "nabu-usb-keyboard-Edge_Cuts.gbr",
+      "Path":  "nabu-keyboard-usb-Edge_Cuts.gbr",
       "FileFunction":  "Profile",
       "FilePolarity":  "Positive"
     }

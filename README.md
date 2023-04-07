@@ -242,7 +242,7 @@ Ok, so you've built the board, now you need to get the firmware onto the Pico.  
 a small button on the Pico board.  What you need to do is to hold that button down while you connect
 the Pico to your computer using the USB cable.  When you do that, the Pico will appear on your computer
 as a hard drive with a FAT file system on it named "RPI-RP2" (exactlty how this appears on your computer
-is left as an exercise to the reader).  All you need to do is copy the provided **_nabu_usb_keyboard.uf2_**
+is left as an exercise to the reader).  All you need to do is copy the provided **_nabu_keyboard_usb.uf2_**
 file onto that file system _et viola!_ your Pico is programmed and has now attached itself as a USB HID
 devies with 1 keyboard interface and 2 game pad interfaces!
 
