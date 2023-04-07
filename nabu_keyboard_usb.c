@@ -25,7 +25,7 @@
  */
 
 /*
- * NABU USB Keyboard
+ * NABU Keyboard to USB Adapter
  *
  * This interfaces a NABU PC keyboard as a USB keyboard device
  * with the standard US layout.
