@@ -22,14 +22,14 @@ The firmware in the keyboard then configures the MC6803's on-board UART to divid
 the baud clock.  Communication with the keyboard is unidirectional; it is not possible to send
 commands to the keyboard.
 
-The keyboard is powered by a 9V - 12V power supply provided by the NABU.  The available
-documentation is somewhat unclear about the requirements of this power supply.  Measured,
-the NABU supplies an unregulated 12V.  The documentation says 9V @ 300mA, but my bench
-supply tells me the keyboard draws between 310mA and 320mA when supplied with 9V.  The keyboard
-contains an on-board regulator to provide its own +5V power rail.  In any case, a 9V - 12V DC
-power brick that can supply at least 500mA should be perfect for the job.  The adapter controls
-the power to the NABU using a small power MOSFET connected between the 9V return from the
-keyboard and and negative terminal of the power supply.
+The keyboard is powered by a nominally-12V-but-actally-9V power supply provided by the NABU.
+The keyboard power comes from the NABU's 12V rail, but is fed to the keyboard through a large
+power resistor on the NABU's mainboard, which drops the voltage to ~9V at the keyboard's
+steady-state current draw (documentation says 300mA, but my bench supply tells me 310-320mA).
+The keyboard contains an on-board regulator to provide its own +5V power rail.  In any case,
+a 9V DC power brick that can supply at least 500mA should be perfect for the job.  The adapter
+controls the power to the NABU using a small power MOSFET connected between the 9V return from
+the keyboard and and negative terminal of the power supply.
 
 ## How the adapter works
 
@@ -205,6 +205,9 @@ will fit the board footprints.  I've done the same with the resistors.
 * 2 - [1nF / 1000pF ceramic capacitor](https://www.mouser.com/ProductDetail/581-SR215A102JARTR1)
 * 1 - [180 Ohm resistor](https://www.mouser.com/ProductDetail/603-MFR50SFTE52-180R) that fits in a DIN0207 vertical footprint.
 * 1 - [10K Ohm resistor](https://www.mouser.com/ProductDetail/603-MFR50SFTE52-10K) that fits in a DIN0207 horizontal footprint.
+* 1 - 1N4001 diode in the standard package.  You can actually use whatever diode floats your boat here (it's not involved in
+  any switching, merely used for reverse polarity protection), so long as it has > 18V reverse voltage rating and a 500mA current
+  rating.
 * 1 - [PCB-mount 5.5mm x 2.1mm DC barrel jack](https://www.mouser.com/ProductDetail/163-179PH-EX)
 * 1 - [PCB-mount DIN-6 jack, CLIFF FC680806 or equivalent](https://www.newark.com/cliff-electronic-components/fc680806/din-audio-video-conn-jack-6pos/dp/99AC9154).  Also available [here!](https://www.tme.com/us/en-us/details/fc680806/din-connectors/cliff/d6-fc680806/)
 * 1 - [9V @ 500mA-or-better DC power brick with 5.5mm x 2.1mm barrel connector](https://www.mouser.com/ProductDetail/490-SWI12-9-N-P5)
