@@ -2446,7 +2446,7 @@
   (gr_text "S" (at 145.415 109.22) (layer "F.SilkS") (tstamp 5511ba68-e2cb-47a3-8c02-225e2770f102)
     (effects (font (size 1 1) (thickness 0.15)))
   )
-  (gr_text "NABU Keyboard to USB, Rev 0.1\n(c) 2022 Jason R. Thorpe" (at 167.64 97.79 90) (layer "F.SilkS") (tstamp 75d4bfe8-5e76-45ca-a001-e8c0fe4b4bed)
+  (gr_text "NABU Keyboard to USB, Rev 0.2\n(c) 2022 Jason R. Thorpe" (at 167.64 97.79 90) (layer "F.SilkS") (tstamp 75d4bfe8-5e76-45ca-a001-e8c0fe4b4bed)
     (effects (font (size 1.5 1.5) (thickness 0.3) italic))
   )
   (gr_text "G" (at 137.795 109.22) (layer "F.SilkS") (tstamp 8b80a8ec-4885-455e-8bb4-54d7fab2b2c9)
