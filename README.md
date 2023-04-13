@@ -184,7 +184,7 @@ along with the Gerber files needed to have the board made by your favorite PCB f
 
 ### So what do I need to build one of these things?
 
-Most of the parts requires are bog-standard, available from lots of places.  The Raspberry Pi Pico,
+Most of the parts required are bog-standard, available from lots of places.  The Raspberry Pi Pico,
 the DIP sockets, and the male and female pin headers can all be acquired from Amazon.  If you want
 nice machined DIP sockets instead of the cheap stamped kind, you can get those from
 [Phoenix Enterprises](https://www.peconnectors.com/sockets-dip-ic-machined/), but they have a minimum
@@ -235,7 +235,7 @@ as you go along.  With that in mind, here is the order I would recommend:
 If you already installed the pin headers into your Pico, or bought the Pico with the pin headers
 pre-installed (hopefully with the long end of the pins facing downwards), then cool!  Otherwise,
 a trick that makes it easy is to place the pin headers into the Pico (with the plastic holder on
-the bottom of the Pico and she short end of the pins poking through the Pico board) and then press
+the bottom of the Pico and the short end of the pins poking through the Pico board) and then press
 that as a unit into the female headers installed on the adapter board.  That will hold everything
 steady while you solder the pin headers to the Pico itself.
 
@@ -244,10 +244,10 @@ steady while you solder the pin headers to the Pico itself.
 Ok, so you've built the board, now you need to get the firmware onto the Pico.  This is easy!  There's
 a small button on the Pico board.  What you need to do is to hold that button down while you connect
 the Pico to your computer using the USB cable.  When you do that, the Pico will appear on your computer
-as a hard drive with a FAT file system on it named "RPI-RP2" (exactlty how this appears on your computer
+as a hard drive with a FAT file system on it named "RPI-RP2" (exactly how this appears on your computer
 is left as an exercise to the reader).  All you need to do is copy the provided **_nabu_keyboard_usb.uf2_**
-file onto that file system _et viola!_ your Pico is programmed and has now attached itself as a USB HID
-devies with 1 keyboard interface and 2 game pad interfaces!
+file onto that file system _et voilà!_ your Pico is programmed and has now attached itself as a USB HID
+device with 1 keyboard interface and 2 game pad interfaces!
 
 Once you've programmed the Pico, you're all set.  At this point, I recommend unplugging it from the
 computer before attaching the 9V power brick and NABU keyboard.  Once everything is cabled up, plug
