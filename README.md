@@ -30,16 +30,16 @@ the MC6803's on-board UART to divide E by 128 for the baud clock.
 Communication with the keyboard is unidirectional; it is not possible to
 send commands to the keyboard.
 
-The keyboard is powered by a 9V - 12V power supply provided by the NABU.
-The available documentation is somewhat unclear about the requirements of
-this power supply.  Measured, the NABU supplies an unregulated 12V.  The
-documentation says 9V @ 300mA, but my bench supply tells me the keyboard
-draws between 310mA and 320mA when supplied with 9V.  The keyboard contains
-an on-board regulator to provide its own +5V power rail.  In any case, a
-9V - 12V DC power brick that can supply at least 500mA should be perfect
-for the job.  The adapter controls the power to the NABU using a small
-power MOSFET connected between the 9V return from the keyboard and and
-negative terminal of the power supply.
+The keyboard is powered by a nominally-12V-but-actally-9V power supply
+provided by the NABU.  The keyboard power comes from the NABU's 12V rail,
+but is fed to the keyboard through a large power resistor on the NABU's
+mainboard, which drops the voltage to ~9V at the keyboard's steady-state
+current draw (documentation says 300mA, but my bench supply tells me
+310-320mA).  The keyboard contains an on-board regulator to provide its
+own +5V power rail.  In any case, a 9V DC power brick that can supply at
+least 500mA should be perfect for the job.  The adapter controls the power
+to the NABU using a small power MOSFET connected between the 9V return from
+the keyboard and and negative terminal of the power supply.
 
 ## How the adapter works
 
@@ -240,7 +240,7 @@ the board made by your favorite PCB fabrication house.
 
 ### So what do I need to build one of these things?
 
-Most of the parts requires are bog-standard, available from lots of places.
+Most of the parts required are bog-standard, available from lots of places.
 The Raspberry Pi Pico, the DIP sockets, and the male and female pin headers
 can all be acquired from Amazon.  If you want nice machined DIP sockets
 instead of the cheap stamped kind, you can get those from [Phoenix Enterprises]
@@ -267,6 +267,9 @@ done the same with the resistors.
 * 2 - [1nF / 1000pF ceramic capacitor](https://www.mouser.com/ProductDetail/581-SR215A102JARTR1)
 * 1 - [180 Ohm resistor](https://www.mouser.com/ProductDetail/603-MFR50SFTE52-180R) that fits in a DIN0207 vertical footprint.
 * 1 - [10K Ohm resistor](https://www.mouser.com/ProductDetail/603-MFR50SFTE52-10K) that fits in a DIN0207 horizontal footprint.
+* 1 - 1N4001 diode in the standard package.  You can actually use whatever diode floats your boat here (it's not involved in
+  any switching, merely used for reverse polarity protection), so long as it has > 18V reverse voltage rating and a 500mA current
+  rating.
 * 1 - [PCB-mount 5.5mm x 2.1mm DC barrel jack](https://www.mouser.com/ProductDetail/163-179PH-EX)
 * 1 - [PCB-mount DIN-6 jack, CLIFF FC680806 or equivalent](https://www.newark.com/cliff-electronic-components/fc680806/din-audio-video-conn-jack-6pos/dp/99AC9154).  Also available [here!](https://www.tme.com/us/en-us/details/fc680806/din-connectors/cliff/d6-fc680806/)
 * 1 - [9V @ 500mA-or-better DC power brick with 5.5mm x 2.1mm barrel connector](https://www.mouser.com/ProductDetail/490-SWI12-9-N-P5)
@@ -297,23 +300,22 @@ If you already installed the pin headers into your Pico, or bought the Pico
 with the pin headers pre-installed (hopefully with the long end of the pins
 facing downwards), then cool!  Otherwise, a trick that makes it easy is to
 place the pin headers into the Pico (with the plastic holder on the bottom
-of the Pico and she short end of the pins poking through the Pico board) and
+of the Pico and the short end of the pins poking through the Pico board) and
 then press that as a unit into the female headers installed on the adapter
 board.  That will hold everything steady while you solder the pin headers
 to the Pico itself.
 
 ### Programming the Pico with the NABU Keyboard to USB firmware
 
-Ok, so you've built the board, now you need to get the firmware onto the
-Pico.  This is easy!  There's a small button on the Pico board.  What you
-need to do is to hold that button down while you connect the Pico to your
-computer using the USB cable.  When you do that, the Pico will appear on
-your computer as a hard drive with a FAT file system on it named "RPI-RP2"
-(exactlty how this appears on your computer is left as an exercise to the
-reader).  All you need to do is copy the provided **_nabu_keyboard_usb.uf2_**
-file onto that file system _et viola!_ your Pico is programmed and has now
-attached itself as a USB HID devies with 1 keyboard interface and 2 game
-pad interfaces!
+Ok, so you've built the board, now you need to get the firmware onto the Pico.
+This is easy!  There's a small button on the Pico board.  What you need to do
+is to hold that button down while you connect the Pico to your computer using
+the USB cable.  When you do that, the Pico will appear on your computer as a
+hard drive with a FAT file system on it named "RPI-RP2" (exactly how this
+appears on your computer is left as an exercise to the reader).  All you need
+to do is copy the provided **_nabu_keyboard_usb.uf2_** file onto that file
+system _et voilà!_ your Pico is programmed and has now attached itself as a
+USB HID device with 1 keyboard interface and 2 game pad interfaces!
 
 Once you've programmed the Pico, you're all set.  At this point, I recommend
 unplugging it from the computer before attaching the 9V power brick and NABU
