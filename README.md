@@ -243,11 +243,11 @@ the board made by your favorite PCB fabrication house.
 Most of the parts required are bog-standard, available from lots of places.
 The Raspberry Pi Pico, the DIP sockets, and the male and female pin headers
 can all be acquired from Amazon.  If you want nice machined DIP sockets
-instead of the cheap stamped kind, you can get those from [Phoenix Enterprises]
-(https://www.peconnectors.com/sockets-dip-ic-machined/), but they have a
-minimum order.  The ceramic capacitors are basic parts, but I've provided
-links to specific parts that I know will fit the board footprints.  I've
-done the same with the resistors.
+instead of the cheap stamped kind, you can get those from
+[Phoenix Enterprises](https://www.peconnectors.com/sockets-dip-ic-machined/),
+but they have a minimum order.  The ceramic capacitors are basic parts,
+but I've provided links to specific parts that I know will fit the board
+footprints.  I've done the same with the resistors.
 
 * 1 - Raspberry Pi Pico
 * 2 - 20x1 2.54mm pin header (for the Pico)
